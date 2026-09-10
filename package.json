@@ -1,7 +1,7 @@
 {
   "name": "zenzi-crm",
   "version": "1.0.0",
-  "description": "Cloud CRM with automated courier API integration",
+  "description": "Zenzi Shop Operations CRM",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

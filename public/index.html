@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zenzi Shop — Operations & NCM Logistics</title>
+  <title>Zenzi Shop Operations CRM</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -20,6 +20,17 @@
       margin-bottom: 24px;
     }
     h2 { font-weight: 600; font-size: 22px; letter-spacing: -0.3px; margin: 0; color: #1c1714; }
+    .btn-sync {
+      background: #4a3c31;
+      color: #fff;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .btn-sync:hover { background: #2d251e; }
     
     form {
       background: #ffffff;
@@ -56,10 +67,10 @@
     }
     .btn-submit:hover { background: #4a3c31; }
 
-    .pipeline { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 16px; }
+    .pipeline { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 16px; }
     .column {
       flex: 1;
-      min-width: 310px;
+      min-width: 260px;
       background: #ece7df;
       border-radius: 12px;
       padding: 16px;
@@ -81,20 +92,9 @@
       border: 1px solid #e2ded5;
       cursor: grab;
       box-shadow: 0 2px 6px rgba(45, 37, 30, 0.04);
-      display: flex;
-      gap: 12px;
     }
     .card:active { cursor: grabbing; }
-    .card-img {
-      width: 60px;
-      height: 60px;
-      border-radius: 6px;
-      object-fit: cover;
-      background: #ece7df;
-      flex-shrink: 0;
-      border: 1px solid #e8e4dc;
-    }
-    .card-details { flex: 1; font-size: 13px; line-height: 1.4; }
+    .card-details { font-size: 13px; line-height: 1.4; }
     .customer-name { font-weight: 600; color: #1c1714; }
     .meta-text { color: #6b5c50; font-size: 12px; margin-top: 2px; }
     .instruction-text { font-style: italic; color: #854d0e; background: #fefce8; padding: 4px 6px; border-radius: 4px; font-size: 11px; margin-top: 4px; }
@@ -123,6 +123,7 @@
 
   <div class="header">
     <h2>Zenzi Operations & NCM Dispatch</h2>
+    <button class="btn-sync" onclick="syncNCM()">🔄 Sync NCM Status</button>
   </div>
 
   <form id="orderForm">
@@ -133,18 +134,15 @@
     <input type="text" id="packageName" placeholder="Package (e.g. Tote Bag) *" required>
     <input type="number" id="codAmount" placeholder="COD Amount (NPR) *" required>
     
-    <!-- Destination Branch Search -->
     <input list="branchList" id="toBranch" placeholder="NCM Destination Branch *" required>
     <datalist id="branchList"></datalist>
 
-    <!-- Delivery Type Choice -->
     <select id="deliveryType">
       <option value="Door2Door" selected>Door2Door Delivery</option>
       <option value="Branch2Branch">Branch2Branch Pickup</option>
     </select>
 
     <input type="text" id="instruction" placeholder="Instructions / Remarks (Optional)">
-    <input type="url" id="imageUrl" placeholder="Product Image Link (Optional)">
     
     <button type="submit" class="btn-submit">Add New Order</button>
   </form>
@@ -154,10 +152,19 @@
       <h3>Received</h3>
     </div>
     <div class="column" id="packed" ondragover="allowDrop(event)" ondrop="drop(event, 'packed')">
-      <h3>Packed ⚡ (Fires NCM API)</h3>
+      <h3>Packed ⚡ (Fires API)</h3>
     </div>
-    <div class="column" id="dispatched" ondragover="allowDrop(event)" ondrop="drop(event, 'dispatched')">
-      <h3>Dispatched</h3>
+    <div class="column" id="processing" ondragover="allowDrop(event)" ondrop="drop(event, 'processing')">
+      <h3>Processing</h3>
+    </div>
+    <div class="column" id="hold" ondragover="allowDrop(event)" ondrop="drop(event, 'hold')">
+      <h3>Hold Orders</h3>
+    </div>
+    <div class="column" id="problem" ondragover="allowDrop(event)" ondrop="drop(event, 'problem')">
+      <h3>Problematic</h3>
+    </div>
+    <div class="column" id="delivered" ondragover="allowDrop(event)" ondrop="drop(event, 'delivered')">
+      <h3>Delivered</h3>
     </div>
   </div>
 
@@ -194,10 +201,6 @@
         div.id = `order-${order.id}`;
         div.ondragstart = (e) => e.dataTransfer.setData('id', order.id);
         
-        let imgHtml = order.image_url 
-          ? `<img src="${order.image_url}" class="card-img" alt="Product" onerror="this.style.display='none'">` 
-          : '';
-
         let trackingHtml = order.tracking_id 
           ? `<span class="tracking-badge">📦 NCM: ${order.tracking_id}</span>` 
           : '';
@@ -215,7 +218,6 @@
           : '';
 
         div.innerHTML = `
-          ${imgHtml}
           <div class="card-details">
             <div class="customer-name">${order.customer_name}</div>
             <div class="meta-text">${phoneText}</div>
@@ -249,8 +251,7 @@
           cod_amount: document.getElementById('codAmount').value,
           to_branch: document.getElementById('toBranch').value,
           delivery_type: document.getElementById('deliveryType').value,
-          instruction: document.getElementById('instruction').value,
-          image_url: document.getElementById('imageUrl').value
+          instruction: document.getElementById('instruction').value
         })
       });
       document.getElementById('orderForm').reset();
@@ -271,10 +272,27 @@
 
       const data = await res.json();
       if (!res.ok) {
-        alert(`NCM API Error: ${JSON.stringify(data.details || data.error)}`);
+        alert(`API Error: ${JSON.stringify(data.details || data.error)}`);
       }
       
       loadOrders(); 
+    }
+
+    // Ping Backend to check NCM statuses and re-sort columns automatically
+    async function syncNCM() {
+      const btn = document.querySelector('.btn-sync');
+      btn.innerText = 'Syncing...';
+      try {
+        const res = await fetch('/api/orders/sync', { method: 'POST' });
+        const data = await res.json();
+        if(data.success) {
+          alert(`Sync complete. ${data.synced} orders updated.`);
+          loadOrders();
+        }
+      } catch (err) {
+        alert('Sync failed.');
+      }
+      btn.innerText = '🔄 Sync NCM Status';
     }
 
     loadBranches();
