@@ -94,7 +94,27 @@
       box-shadow: 0 2px 6px rgba(45, 37, 30, 0.04);
     }
     .card:active { cursor: grabbing; }
-    .card-details { font-size: 13px; line-height: 1.4; }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 4px;
+    }
+    .btn-delete {
+      background: transparent;
+      border: none;
+      color: #a8a29e;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-delete:hover {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+    .card-details { font-size: 13px; line-height: 1.4; width: 100%; }
     .customer-name { font-weight: 600; color: #1c1714; }
     .meta-text { color: #6b5c50; font-size: 12px; margin-top: 2px; }
     .instruction-text { font-style: italic; color: #854d0e; background: #fefce8; padding: 4px 6px; border-radius: 4px; font-size: 11px; margin-top: 4px; }
@@ -180,9 +200,7 @@
           opt.value = b;
           datalist.appendChild(opt);
         });
-      } catch (err) {
-        console.error('Branch loading error:', err);
-      }
+      } catch (err) {}
     }
 
     async function loadOrders() {
@@ -219,7 +237,10 @@
 
         div.innerHTML = `
           <div class="card-details">
-            <div class="customer-name">${order.customer_name}</div>
+            <div class="card-header">
+              <div class="customer-name">${order.customer_name}</div>
+              <button class="btn-delete" onclick="deleteOrder(${order.id})" title="Delete Order">🗑️</button>
+            </div>
             <div class="meta-text">${phoneText}</div>
             <div class="meta-text">📍 ${order.shipping_address}</div>
             <div class="meta-text">🛍️ ${order.package_name || 'N/A'} | NPR ${order.cod_amount || 0}</div>
@@ -271,14 +292,11 @@
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        alert(`API Error: ${JSON.stringify(data.details || data.error)}`);
-      }
+      if (!res.ok) alert(`API Error: ${JSON.stringify(data.details || data.error)}`);
       
       loadOrders(); 
     }
 
-    // Ping Backend to check NCM statuses and re-sort columns automatically
     async function syncNCM() {
       const btn = document.querySelector('.btn-sync');
       btn.innerText = 'Syncing...';
@@ -293,6 +311,21 @@
         alert('Sync failed.');
       }
       btn.innerText = '🔄 Sync NCM Status';
+    }
+
+    // NEW DELETE FUNCTION
+    async function deleteOrder(id) {
+      if (!confirm('Are you sure you want to permanently delete this order?')) return;
+      try {
+        const res = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          loadOrders();
+        } else {
+          alert('Failed to delete order.');
+        }
+      } catch (err) {
+        alert('Error connecting to server.');
+      }
     }
 
     loadBranches();

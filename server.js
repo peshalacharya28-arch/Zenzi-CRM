@@ -10,17 +10,14 @@ app.use(cors());
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// NCM API Configuration
 const NCM_TOKEN = process.env.NCM_TOKEN || '6543202e39d2b90776037483b546f2fb2d3d93c4';
-const NCM_FROM_BRANCH = 'KALANKI'; // Hardcoded default origin
+const NCM_FROM_BRANCH = 'KALANKI';
 
-// Cloud PostgreSQL Database
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// Auto-migrate database schema safely
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -50,7 +47,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 1. Fetch live NCM Branch list
 app.get('/api/branches', async (req, res) => {
   try {
     const response = await axios.get('https://portal.nepalcanmove.com/api/v2/branches', {
@@ -64,7 +60,6 @@ app.get('/api/branches', async (req, res) => {
   }
 });
 
-// 2. Fetch all orders
 app.get('/api/orders', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM orders ORDER BY id DESC');
@@ -74,7 +69,6 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
-// 3. Save new order
 app.post('/api/orders', async (req, res) => {
   const { 
     customer_name, phone_number, phone2, shipping_address, 
@@ -98,7 +92,6 @@ app.post('/api/orders', async (req, res) => {
   }
 });
 
-// 4. Manual Drag-and-Drop / API Dispatch Trigger
 app.patch('/api/orders/:id/status', async (req, res) => {
   const { status } = req.body;
   const orderId = req.params.id;
@@ -109,7 +102,6 @@ app.patch('/api/orders/:id/status', async (req, res) => {
 
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    // ONLY dispatch to NCM if moved to 'packed' AND no tracking ID exists (blocks duplicates)
     if (status === 'packed' && !order.tracking_id) {
       const shortTimestamp = Date.now().toString().slice(-6);
       const vref = `Z${shortTimestamp}`;
@@ -124,7 +116,7 @@ app.patch('/api/orders/:id/status', async (req, res) => {
         package: order.package_name || 'Zenzi Product',
         vref_id: vref,
         delivery_type: order.delivery_type || 'Door2Door',
-        weight: '1' // Hardcoded per your specification
+        weight: '1'
       };
 
       if (order.phone2) ncmPayload.phone2 = order.phone2;
@@ -149,16 +141,13 @@ app.patch('/api/orders/:id/status', async (req, res) => {
       }
     }
 
-    // Process manual drag-and-drop overrides normally
     await pool.query('UPDATE orders SET status = $1 WHERE id = $2', [status, orderId]);
     res.json({ success: true, status });
   } catch (error) {
-    console.error('NCM Dispatch Error:', error.response ? error.response.data : error.message);
     res.status(500).json({ error: 'Logistics processing failed', details: error.response ? error.response.data : error.message });
   }
 });
 
-// 5. NCM Status Polling Check Endpoint
 app.post('/api/orders/sync', async (req, res) => {
   try {
     const activeOrders = await pool.query("SELECT * FROM orders WHERE tracking_id IS NOT NULL AND status IN ('packed', 'processing')");
@@ -174,7 +163,6 @@ app.post('/api/orders/sync', async (req, res) => {
         const statusText = JSON.stringify(response.data).toLowerCase();
         let newStatus = order.status;
 
-        // Route statuses automatically based on NCM feedback
         if (statusText.includes('delivered')) {
           newStatus = 'delivered';
         } else if (statusText.includes('dispatched') || statusText.includes('transit')) {
@@ -185,13 +173,22 @@ app.post('/api/orders/sync', async (req, res) => {
           await pool.query("UPDATE orders SET status = $1 WHERE id = $2", [newStatus, order.id]);
           updatedCount++;
         }
-      } catch (err) {
-        // Skip individual API timeouts to ensure bulk loop completes
-      }
+      } catch (err) {}
     }
     res.json({ success: true, synced: updatedCount });
   } catch (err) {
     res.status(500).json({ error: 'Sync failed' });
+  }
+});
+
+// NEW DELETE ENDPOINT
+app.delete('/api/orders/:id', async (req, res) => {
+  const orderId = req.params.id;
+  try {
+    await pool.query('DELETE FROM orders WHERE id = $1', [orderId]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete order' });
   }
 });
 
