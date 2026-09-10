@@ -2,19 +2,22 @@ const express = require('express');
 const { Pool } = require('pg');
 const axios = require('axios');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 app.use(express.json());
-app.use(express.static('public'));
 app.use(cors());
 
-// Initialize PostgreSQL Connection using Environment Variables
+// Serve static assets using absolute path directory to prevent "Cannot GET /"
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Initialize Cloud PostgreSQL Database (Supabase)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// Create table if it doesn't exist
+// Auto-create database table
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -26,17 +29,22 @@ pool.query(`
   )
 `).catch(err => console.error('Database initialization error:', err));
 
-// 1. Fetch all orders
+// 1. Root route to render frontend dashboard
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// 2. Fetch all orders
 app.get('/api/orders', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM orders ORDER BY id DESC');
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: 'Database error' });
+    res.status(500).json({ error: 'Database query error' });
   }
 });
 
-// 2. Create a new lead/order
+// 3. Create a new lead / order
 app.post('/api/orders', async (req, res) => {
   const { customer_name, phone_number, shipping_address } = req.body;
   try {
@@ -46,11 +54,11 @@ app.post('/api/orders', async (req, res) => {
     );
     res.json({ id: result.rows[0].id });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create order' });
+    res.status(500).json({ error: 'Failed to create record' });
   }
 });
 
-// 3. Update status & Execute Logistics API Call
+// 4. Update status & Execute Logistics API Call
 app.patch('/api/orders/:id/status', async (req, res) => {
   const { status } = req.body;
   const orderId = req.params.id;
@@ -58,14 +66,14 @@ app.patch('/api/orders/:id/status', async (req, res) => {
   try {
     await pool.query('UPDATE orders SET status = $1 WHERE id = $2', [status, orderId]);
 
-    // THE API TRIGGER: Only fires when dragging to "packed"
+    // THE LOGISTICS API TRIGGER: Only fires when dragged to "packed"
     if (status === 'packed') {
       const orderResult = await pool.query('SELECT * FROM orders WHERE id = $1', [orderId]);
       const order = orderResult.rows[0];
 
       if (order) {
         /*
-        // UNCOMMENT THIS ONCE YOU HAVE YOUR COURIER API KEYS
+        // UNCOMMENT AND CONFIGURE WHEN READY TO CONNECT YOUR REAL COURIER API
         const logisticsPayload = {
           store_id: 'YOUR_STORE_ID',
           recipient_name: order.customer_name,
@@ -82,7 +90,7 @@ app.patch('/api/orders/:id/status', async (req, res) => {
         const tracking_id = response.data.tracking_number;
         */
 
-        // Simulated API response for testing
+        // Simulated API tracking number for testing
         const tracking_id = 'NP-' + Math.floor(Math.random() * 1000000);
 
         await pool.query(
@@ -96,10 +104,10 @@ app.patch('/api/orders/:id/status', async (req, res) => {
 
     res.json({ success: true, status });
   } catch (error) {
-    res.status(500).json({ error: 'Process failed' });
+    res.status(500).json({ error: 'Failed to update order status' });
   }
 });
 
-// Dynamic port assignment required by cloud platforms like Render
+// Bind dynamic port provided by cloud environment
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`CRM Server running on port ${PORT}`));
