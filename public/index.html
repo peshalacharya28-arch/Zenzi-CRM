@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Commerce Cloud CRM</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f4f5; margin: 0; padding: 24px; color: #18181b; }
+    h2 { margin-top: 0; }
+    form { background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e4e4e7; margin-bottom: 24px; display: flex; gap: 12px; flex-wrap: wrap; }
+    input { padding: 10px 14px; border: 1px solid #d4d4d8; border-radius: 6px; flex: 1; min-width: 200px; font-size: 14px; }
+    button { background: #09090b; color: #ffffff; padding: 10px 20px; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; font-size: 14px; }
+    button:hover { background: #27272a; }
+    .pipeline { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 12px; }
+    .column { flex: 1; min-width: 280px; background: #e4e4e7; border-radius: 8px; padding: 16px; min-height: 500px; }
+    .column h3 { font-size: 15px; margin: 0 0 16px 0; color: #3f3f46; display: flex; justify-content: space-between; align-items: center; }
+    .card { background: #ffffff; padding: 16px; margin-bottom: 12px; border-radius: 6px; border: 1px solid #d4d4d8; cursor: grab; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .card:active { cursor: grabbing; }
+    .tracking-badge { background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-top: 10px; display: inline-block; }
+  </style>
+</head>
+<body>
+
+  <h2>E-Commerce Orders & Logistics CRM</h2>
+
+  <form id="orderForm">
+    <input type="text" id="name" placeholder="Customer Name" required>
+    <input type="text" id="phone" placeholder="Phone Number" required>
+    <input type="text" id="address" placeholder="Delivery Address" required>
+    <button type="submit">Add New Order</button>
+  </form>
+
+  <div class="pipeline">
+    <div class="column" id="received" ondragover="allowDrop(event)" ondrop="drop(event, 'received')">
+      <h3>Received</h3>
+    </div>
+    <div class="column" id="packed" ondragover="allowDrop(event)" ondrop="drop(event, 'packed')">
+      <h3>Packed ⚡ (Triggers API)</h3>
+    </div>
+    <div class="column" id="dispatched" ondragover="allowDrop(event)" ondrop="drop(event, 'dispatched')">
+      <h3>Dispatched</h3>
+    </div>
+  </div>
+
+  <script>
+    async function loadOrders() {
+      const res = await fetch('/api/orders');
+      const orders = await res.json();
+      
+      document.querySelectorAll('.column').forEach(col => {
+        const title = col.querySelector('h3').outerHTML;
+        col.innerHTML = title;
+      });
+
+      orders.forEach(order => {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.draggable = true;
+        div.id = `order-${order.id}`;
+        div.ondragstart = (e) => e.dataTransfer.setData('id', order.id);
+        
+        let content = `<strong>${order.customer_name}</strong><br/>📞 ${order.phone_number}<br/>📍 ${order.shipping_address}`;
+        if (order.tracking_id) content += `<br/><span class="tracking-badge">📦 ${order.tracking_id}</span>`;
+        
+        div.innerHTML = content;
+        
+        const column = document.getElementById(order.status);
+        if (column) column.appendChild(div);
+      });
+    }
+
+    document.getElementById('orderForm').onsubmit = async (e) => {
+      e.preventDefault();
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: document.getElementById('name').value,
+          phone_number: document.getElementById('phone').value,
+          shipping_address: document.getElementById('address').value
+        })
+      });
+      document.getElementById('orderForm').reset();
+      loadOrders();
+    };
+
+    function allowDrop(e) { e.preventDefault(); }
+
+    async function drop(e, newStatus) {
+      e.preventDefault();
+      const orderId = e.dataTransfer.getData('id');
+      await fetch(`/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      loadOrders(); 
+    }
+
+    loadOrders();
+  </script>
+</body>
+</html>
