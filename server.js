@@ -1,5 +1,5 @@
 const express = require('express');
-const sqlite3 = require(']@db.pnecdxsqaevyvsnibdcu.supabase.co:5432/').verbose();
+const sqlite3 = require('postgresql://postgres:[YOUR-PASSWORD]@db.pnecdxsqaevyvsnibdcu.supabase.co:5432/postgres').verbose();
 const axios = require('axios');
 const cors = require('cors');
 
