@@ -3,32 +3,127 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>E-Commerce Cloud CRM</title>
+  <title>Zenzi Shop — Operations CRM</title>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f4f5; margin: 0; padding: 24px; color: #18181b; }
-    h2 { margin-top: 0; }
-    form { background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e4e4e7; margin-bottom: 24px; display: flex; gap: 12px; flex-wrap: wrap; }
-    input { padding: 10px 14px; border: 1px solid #d4d4d8; border-radius: 6px; flex: 1; min-width: 200px; font-size: 14px; }
-    button { background: #09090b; color: #ffffff; padding: 10px 20px; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; font-size: 14px; }
-    button:hover { background: #27272a; }
-    .pipeline { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 12px; }
-    .column { flex: 1; min-width: 280px; background: #e4e4e7; border-radius: 8px; padding: 16px; min-height: 500px; }
-    .column h3 { font-size: 15px; margin: 0 0 16px 0; color: #3f3f46; display: flex; justify-content: space-between; align-items: center; }
-    .card { background: #ffffff; padding: 16px; margin-bottom: 12px; border-radius: 6px; border: 1px solid #d4d4d8; cursor: grab; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f6f4f0;
+      margin: 0;
+      padding: 32px 24px;
+      color: #2d251e;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    h2 { font-weight: 600; font-size: 22px; letter-spacing: -0.3px; margin: 0; color: #1c1714; }
+    
+    form {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #e8e4dc;
+      margin-bottom: 28px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      box-shadow: 0 2px 8px rgba(45, 37, 30, 0.03);
+    }
+    input {
+      padding: 10px 14px;
+      border: 1px solid #d8d2c7;
+      border-radius: 8px;
+      flex: 1;
+      min-width: 180px;
+      font-size: 13px;
+      background: #faf8f5;
+      color: #2d251e;
+      outline: none;
+    }
+    input:focus { border-color: #7a5230; background: #ffffff; }
+    button {
+      background: #2d251e;
+      color: #ffffff;
+      padding: 10px 22px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 500;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s ease;
+    }
+    button:hover { background: #4a3c31; }
+
+    .pipeline { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 16px; }
+    .column {
+      flex: 1;
+      min-width: 300px;
+      background: #ece7df;
+      border-radius: 12px;
+      padding: 16px;
+      min-height: 550px;
+    }
+    .column h3 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin: 0 0 16px 0;
+      color: #6b5c50;
+      font-weight: 600;
+    }
+    .card {
+      background: #ffffff;
+      padding: 14px;
+      margin-bottom: 12px;
+      border-radius: 10px;
+      border: 1px solid #e2ded5;
+      cursor: grab;
+      box-shadow: 0 2px 6px rgba(45, 37, 30, 0.04);
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
     .card:active { cursor: grabbing; }
-    .tracking-badge { background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-top: 10px; display: inline-block; }
+    .card-img {
+      width: 56px;
+      height: 56px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: #ece7df;
+      flex-shrink: 0;
+      border: 1px solid #e8e4dc;
+    }
+    .card-details { flex: 1; font-size: 13px; line-height: 1.4; }
+    .customer-name { font-weight: 600; color: #1c1714; margin-bottom: 2px; }
+    .meta-text { color: #6b5c50; font-size: 12px; }
+    .tracking-badge {
+      background: #f3ece4;
+      color: #7a5230;
+      border: 1px solid #e2d2c1;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 8px;
+      display: inline-block;
+    }
   </style>
 </head>
 <body>
 
-  <h2>E-Commerce Orders & Logistics CRM</h2>
+  <div class="header">
+    <h2>Zenzi Shop Operations</h2>
+  </div>
 
   <form id="orderForm">
     <input type="text" id="name" placeholder="Customer Name" required>
     <input type="text" id="phone" placeholder="Phone Number" required>
     <input type="text" id="address" placeholder="Delivery Address" required>
-    <button type="submit">Add New Order</button>
+    <input type="url" id="imageUrl" placeholder="Product Image URL (Optional)">
+    <button type="submit">Add Order</button>
   </form>
 
   <div class="pipeline">
@@ -36,7 +131,7 @@
       <h3>Received</h3>
     </div>
     <div class="column" id="packed" ondragover="allowDrop(event)" ondrop="drop(event, 'packed')">
-      <h3>Packed ⚡ (Triggers API)</h3>
+      <h3>Packed ⚡ (Auto Dispatch)</h3>
     </div>
     <div class="column" id="dispatched" ondragover="allowDrop(event)" ondrop="drop(event, 'dispatched')">
       <h3>Dispatched</h3>
@@ -60,10 +155,23 @@
         div.id = `order-${order.id}`;
         div.ondragstart = (e) => e.dataTransfer.setData('id', order.id);
         
-        let content = `<strong>${order.customer_name}</strong><br/>📞 ${order.phone_number}<br/>📍 ${order.shipping_address}`;
-        if (order.tracking_id) content += `<br/><span class="tracking-badge">📦 ${order.tracking_id}</span>`;
-        
-        div.innerHTML = content;
+        let imgHtml = order.image_url 
+          ? `<img src="${order.image_url}" class="card-img" alt="Product" onerror="this.style.display='none'">` 
+          : '';
+
+        let trackingHtml = order.tracking_id 
+          ? `<div class="tracking-badge">📦 ${order.tracking_id}</div>` 
+          : '';
+
+        div.innerHTML = `
+          ${imgHtml}
+          <div class="card-details">
+            <div class="customer-name">${order.customer_name}</div>
+            <div class="meta-text">📞 ${order.phone_number}</div>
+            <div class="meta-text">📍 ${order.shipping_address}</div>
+            ${trackingHtml}
+          </div>
+        `;
         
         const column = document.getElementById(order.status);
         if (column) column.appendChild(div);
@@ -78,7 +186,8 @@
         body: JSON.stringify({
           customer_name: document.getElementById('name').value,
           phone_number: document.getElementById('phone').value,
-          shipping_address: document.getElementById('address').value
+          shipping_address: document.getElementById('address').value,
+          image_url: document.getElementById('imageUrl').value
         })
       });
       document.getElementById('orderForm').reset();
