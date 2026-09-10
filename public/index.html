@@ -32,7 +32,7 @@
       gap: 12px;
       box-shadow: 0 2px 8px rgba(45, 37, 30, 0.03);
     }
-    input {
+    input, select {
       padding: 10px 14px;
       border: 1px solid #d8d2c7;
       border-radius: 8px;
@@ -42,7 +42,7 @@
       outline: none;
       width: 100%;
     }
-    input:focus { border-color: #7a5230; background: #ffffff; }
+    input:focus, select:focus { border-color: #7a5230; background: #ffffff; }
     .btn-submit {
       grid-column: 1 / -1;
       background: #2d251e;
@@ -97,6 +97,7 @@
     .card-details { flex: 1; font-size: 13px; line-height: 1.4; }
     .customer-name { font-weight: 600; color: #1c1714; }
     .meta-text { color: #6b5c50; font-size: 12px; margin-top: 2px; }
+    .instruction-text { font-style: italic; color: #854d0e; background: #fefce8; padding: 4px 6px; border-radius: 4px; font-size: 11px; margin-top: 4px; }
     .badge-container { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
     .tracking-badge {
       background: #f3ece4;
@@ -121,21 +122,30 @@
 <body>
 
   <div class="header">
-    <h2>Zenzi Operations & Nepal Can Move Dispatch</h2>
+    <h2>Zenzi Operations & NCM Dispatch</h2>
   </div>
 
   <form id="orderForm">
-    <input type="text" id="name" placeholder="Customer Name" required>
-    <input type="text" id="phone" placeholder="Phone Number" required>
-    <input type="text" id="address" placeholder="Full Delivery Address" required>
-    <input type="text" id="packageName" placeholder="Package (e.g. Canvas Tote Bag)" required>
-    <input type="number" id="codAmount" placeholder="COD Amount (NPR)" required>
+    <input type="text" id="name" placeholder="Customer Name *" required>
+    <input type="text" id="phone" placeholder="Primary Phone *" required>
+    <input type="text" id="phone2" placeholder="Secondary Phone (Optional)">
+    <input type="text" id="address" placeholder="Full Delivery Address *" required>
+    <input type="text" id="packageName" placeholder="Package (e.g. Tote Bag) *" required>
+    <input type="number" id="codAmount" placeholder="COD Amount (NPR) *" required>
     
-    <!-- NCM Destination Branch Autocomplete -->
-    <input list="branchList" id="toBranch" placeholder="Search NCM Destination Branch" required>
+    <!-- Destination Branch Search -->
+    <input list="branchList" id="toBranch" placeholder="NCM Destination Branch *" required>
     <datalist id="branchList"></datalist>
 
+    <!-- Delivery Type Choice -->
+    <select id="deliveryType">
+      <option value="Door2Door" selected>Door2Door Delivery</option>
+      <option value="Branch2Branch">Branch2Branch Pickup</option>
+    </select>
+
+    <input type="text" id="instruction" placeholder="Instructions / Remarks (Optional)">
     <input type="url" id="imageUrl" placeholder="Product Image Link (Optional)">
+    
     <button type="submit" class="btn-submit">Add New Order</button>
   </form>
 
@@ -152,7 +162,6 @@
   </div>
 
   <script>
-    // Fetch live NCM Branches to populate searchable input
     async function loadBranches() {
       try {
         const res = await fetch('/api/branches');
@@ -197,15 +206,24 @@
           ? `<span class="tracking-badge">V-Ref: ${order.vref_id}</span>` 
           : '';
 
+        let phoneText = order.phone2 
+          ? `📞 ${order.phone_number} / ${order.phone2}` 
+          : `📞 ${order.phone_number}`;
+
+        let instructionHtml = order.instruction 
+          ? `<div class="instruction-text">📝 ${order.instruction}</div>` 
+          : '';
+
         div.innerHTML = `
           ${imgHtml}
           <div class="card-details">
             <div class="customer-name">${order.customer_name}</div>
-            <div class="meta-text">📞 ${order.phone_number}</div>
+            <div class="meta-text">${phoneText}</div>
             <div class="meta-text">📍 ${order.shipping_address}</div>
             <div class="meta-text">🛍️ ${order.package_name || 'N/A'} | NPR ${order.cod_amount || 0}</div>
+            ${instructionHtml}
             <div class="badge-container">
-              <span class="branch-badge">🏢 ${order.to_branch || 'KALANKI'}</span>
+              <span class="branch-badge">🏢 ${order.to_branch || 'KALANKI'} (${order.delivery_type || 'Door2Door'})</span>
               ${trackingHtml}
               ${vrefHtml}
             </div>
@@ -225,10 +243,13 @@
         body: JSON.stringify({
           customer_name: document.getElementById('name').value,
           phone_number: document.getElementById('phone').value,
+          phone2: document.getElementById('phone2').value,
           shipping_address: document.getElementById('address').value,
           package_name: document.getElementById('packageName').value,
           cod_amount: document.getElementById('codAmount').value,
           to_branch: document.getElementById('toBranch').value,
+          delivery_type: document.getElementById('deliveryType').value,
+          instruction: document.getElementById('instruction').value,
           image_url: document.getElementById('imageUrl').value
         })
       });
