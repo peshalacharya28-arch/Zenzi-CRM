@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zenzi Shop — Operations & NCM Logistics</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f6f4f0;
+      margin: 0;
+      padding: 32px 24px;
+      color: #2d251e;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    h2 { font-weight: 600; font-size: 22px; letter-spacing: -0.3px; margin: 0; color: #1c1714; }
+    
+    form {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #e8e4dc;
+      margin-bottom: 28px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(45, 37, 30, 0.03);
+    }
+    input {
+      padding: 10px 14px;
+      border: 1px solid #d8d2c7;
+      border-radius: 8px;
+      font-size: 13px;
+      background: #faf8f5;
+      color: #2d251e;
+      outline: none;
+      width: 100%;
+    }
+    input:focus { border-color: #7a5230; background: #ffffff; }
+    .btn-submit {
+      grid-column: 1 / -1;
+      background: #2d251e;
+      color: #ffffff;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn-submit:hover { background: #4a3c31; }
+
+    .pipeline { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 16px; }
+    .column {
+      flex: 1;
+      min-width: 310px;
+      background: #ece7df;
+      border-radius: 12px;
+      padding: 16px;
+      min-height: 550px;
+    }
+    .column h3 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin: 0 0 16px 0;
+      color: #6b5c50;
+      font-weight: 600;
+    }
+    .card {
+      background: #ffffff;
+      padding: 14px;
+      margin-bottom: 12px;
+      border-radius: 10px;
+      border: 1px solid #e2ded5;
+      cursor: grab;
+      box-shadow: 0 2px 6px rgba(45, 37, 30, 0.04);
+      display: flex;
+      gap: 12px;
+    }
+    .card:active { cursor: grabbing; }
+    .card-img {
+      width: 60px;
+      height: 60px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: #ece7df;
+      flex-shrink: 0;
+      border: 1px solid #e8e4dc;
+    }
+    .card-details { flex: 1; font-size: 13px; line-height: 1.4; }
+    .customer-name { font-weight: 600; color: #1c1714; }
+    .meta-text { color: #6b5c50; font-size: 12px; margin-top: 2px; }
+    .badge-container { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .tracking-badge {
+      background: #f3ece4;
+      color: #7a5230;
+      border: 1px solid #e2d2c1;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .branch-badge {
+      background: #e5edf5;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>Zenzi Operations & Nepal Can Move Dispatch</h2>
+  </div>
+
+  <form id="orderForm">
+    <input type="text" id="name" placeholder="Customer Name" required>
+    <input type="text" id="phone" placeholder="Phone Number" required>
+    <input type="text" id="address" placeholder="Full Delivery Address" required>
+    <input type="text" id="packageName" placeholder="Package (e.g. Canvas Tote Bag)" required>
+    <input type="number" id="codAmount" placeholder="COD Amount (NPR)" required>
+    
+    <!-- NCM Destination Branch Autocomplete -->
+    <input list="branchList" id="toBranch" placeholder="Search NCM Destination Branch" required>
+    <datalist id="branchList"></datalist>
+
+    <input type="url" id="imageUrl" placeholder="Product Image Link (Optional)">
+    <button type="submit" class="btn-submit">Add New Order</button>
+  </form>
+
+  <div class="pipeline">
+    <div class="column" id="received" ondragover="allowDrop(event)" ondrop="drop(event, 'received')">
+      <h3>Received</h3>
+    </div>
+    <div class="column" id="packed" ondragover="allowDrop(event)" ondrop="drop(event, 'packed')">
+      <h3>Packed ⚡ (Fires NCM API)</h3>
+    </div>
+    <div class="column" id="dispatched" ondragover="allowDrop(event)" ondrop="drop(event, 'dispatched')">
+      <h3>Dispatched</h3>
+    </div>
+  </div>
+
+  <script>
+    // Fetch live NCM Branches to populate searchable input
+    async function loadBranches() {
+      try {
+        const res = await fetch('/api/branches');
+        const branches = await res.json();
+        const datalist = document.getElementById('branchList');
+        datalist.innerHTML = '';
+        branches.forEach(b => {
+          const opt = document.createElement('option');
+          opt.value = b;
+          datalist.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('Branch loading error:', err);
+      }
+    }
+
+    async function loadOrders() {
+      const res = await fetch('/api/orders');
+      const orders = await res.json();
+      
+      document.querySelectorAll('.column').forEach(col => {
+        const title = col.querySelector('h3').outerHTML;
+        col.innerHTML = title;
+      });
+
+      orders.forEach(order => {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.draggable = true;
+        div.id = `order-${order.id}`;
+        div.ondragstart = (e) => e.dataTransfer.setData('id', order.id);
+        
+        let imgHtml = order.image_url 
+          ? `<img src="${order.image_url}" class="card-img" alt="Product" onerror="this.style.display='none'">` 
+          : '';
+
+        let trackingHtml = order.tracking_id 
+          ? `<span class="tracking-badge">📦 NCM: ${order.tracking_id}</span>` 
+          : '';
+
+        let vrefHtml = order.vref_id 
+          ? `<span class="tracking-badge">V-Ref: ${order.vref_id}</span>` 
+          : '';
+
+        div.innerHTML = `
+          ${imgHtml}
+          <div class="card-details">
+            <div class="customer-name">${order.customer_name}</div>
+            <div class="meta-text">📞 ${order.phone_number}</div>
+            <div class="meta-text">📍 ${order.shipping_address}</div>
+            <div class="meta-text">🛍️ ${order.package_name || 'N/A'} | NPR ${order.cod_amount || 0}</div>
+            <div class="badge-container">
+              <span class="branch-badge">🏢 ${order.to_branch || 'KALANKI'}</span>
+              ${trackingHtml}
+              ${vrefHtml}
+            </div>
+          </div>
+        `;
+        
+        const column = document.getElementById(order.status);
+        if (column) column.appendChild(div);
+      });
+    }
+
+    document.getElementById('orderForm').onsubmit = async (e) => {
+      e.preventDefault();
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: document.getElementById('name').value,
+          phone_number: document.getElementById('phone').value,
+          shipping_address: document.getElementById('address').value,
+          package_name: document.getElementById('packageName').value,
+          cod_amount: document.getElementById('codAmount').value,
+          to_branch: document.getElementById('toBranch').value,
+          image_url: document.getElementById('imageUrl').value
+        })
+      });
+      document.getElementById('orderForm').reset();
+      loadOrders();
+    };
+
+    function allowDrop(e) { e.preventDefault(); }
+
+    async function drop(e, newStatus) {
+      e.preventDefault();
+      const orderId = e.dataTransfer.getData('id');
+      
+      const res = await fetch(`/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`NCM API Error: ${JSON.stringify(data.details || data.error)}`);
+      }
+      
+      loadOrders(); 
+    }
+
+    loadBranches();
+    loadOrders();
+  </script>
+</body>
+</html>
