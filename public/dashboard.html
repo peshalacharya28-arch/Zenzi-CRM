@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zenzi Shop Operations CRM</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Explicit UMD bundle to match index.html -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -145,20 +146,34 @@
   <script>
     const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // SESSION GUARD: Protect route from unauthenticated access
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // SESSION GUARD: Verify user session
+    dbClient.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         window.location.href = '/index.html';
       } else {
         document.getElementById('userEmail').innerText = session.user.email;
       }
+    }).catch(() => {
+      window.location.href = '/index.html';
     });
 
     async function logout() {
-      await supabase.auth.signOut();
-      window.location.href = '/index.html';
+      try {
+        await dbClient.auth.signOut();
+      } catch (err) {
+        console.error("Logout error:", err);
+      } finally {
+        // Bulletproof fallback: clear local session tokens
+        for (let key in localStorage) {
+          if (key.startsWith('sb-')) {
+            localStorage.removeItem(key);
+          }
+        }
+        window.location.href = '/index.html';
+      }
     }
 
     async function loadBranches() {
