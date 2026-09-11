@@ -4,174 +4,240 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zenzi Shop Operations CRM</title>
-  <!-- Explicit UMD bundle to match index.html -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
+    /* Zenzi Brand Colors & Typography */
+    :root {
+      --bg-main: #f6f4f0;
+      --text-dark: #1c1714;
+      --text-muted: #6b5c50;
+      --col-bg: #3b332c;
+      --border-dark: #2d251e;
+      --accent: #7a5230;
+      --card-bg: #ffffff;
+    }
+
     * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f6f4f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-main);
       margin: 0;
       padding: 32px 24px;
-      color: #2d251e;
+      color: var(--text-dark);
     }
+    
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 24px;
+      margin-bottom: 32px;
+      border-bottom: 2px solid #e8e4dc;
+      padding-bottom: 16px;
     }
-    h2 { font-weight: 600; font-size: 22px; letter-spacing: -0.3px; margin: 0; color: #1c1714; }
-    .header-actions { display: flex; gap: 10px; align-items: center; }
-    .user-badge { font-size: 12px; color: #6b5c50; background: #e8e4dc; padding: 6px 10px; border-radius: 6px; }
-    .btn-sync { background: #4a3c31; color: #fff; padding: 8px 16px; border: none; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; }
-    .btn-sync:hover { background: #2d251e; }
-    .btn-logout { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; }
-    .btn-logout:hover { background: #fecaca; }
+    h2 { font-weight: 700; font-size: 24px; letter-spacing: -0.5px; margin: 0; color: var(--text-dark); }
+    
+    .header-actions { display: flex; gap: 12px; align-items: center; }
+    .user-badge { font-size: 13px; font-weight: 500; color: var(--text-muted); }
+    
+    .btn {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary { background: var(--text-dark); color: #fff; }
+    .btn-primary:hover { background: var(--accent); }
+    .btn-secondary { background: #e8e4dc; color: var(--text-dark); }
+    .btn-secondary:hover { background: #d8d2c7; }
+    .btn-danger { background: transparent; color: #dc2626; border: 1px solid #dc2626; padding: 6px 12px; }
+    .btn-danger:hover { background: #fef2f2; }
+
+    /* Modal Form Overlay */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(28, 23, 20, 0.6);
+      backdrop-filter: blur(4px);
+      display: flex; justify-content: center; align-items: center;
+      z-index: 1000;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    
+    .modal-content {
+      background: var(--card-bg);
+      padding: 32px;
+      border-radius: 12px;
+      width: 100%; max-width: 650px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      transform: translateY(20px);
+      transition: transform 0.2s ease;
+    }
+    .modal-overlay.active .modal-content { transform: translateY(0); }
+    
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .modal-header h3 { margin: 0; font-size: 18px; }
+    .close-modal { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
 
     form {
-      background: #ffffff;
-      padding: 20px;
-      border-radius: 12px;
-      border: 1px solid #e8e4dc;
-      margin-bottom: 28px;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 12px;
-      box-shadow: 0 2px 8px rgba(45, 37, 30, 0.03);
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;
     }
     input, select {
-      padding: 10px 14px;
+      padding: 12px 14px;
       border: 1px solid #d8d2c7;
-      border-radius: 8px;
-      font-size: 13px;
+      border-radius: 6px;
+      font-size: 14px;
       background: #faf8f5;
-      color: #2d251e;
-      outline: none;
-      width: 100%;
+      outline: none; width: 100%;
     }
-    input:focus, select:focus { border-color: #7a5230; background: #ffffff; }
-    .btn-submit {
-      grid-column: 1 / -1;
-      background: #2d251e;
-      color: #ffffff;
-      padding: 12px;
-      border: none;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    .btn-submit:hover { background: #4a3c31; }
+    input:focus, select:focus { border-color: var(--accent); background: #ffffff; }
+    .form-full { grid-column: 1 / -1; }
 
-    .pipeline { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 16px; }
-    .column {
-      flex: 1;
-      min-width: 260px;
-      background: #ece7df;
-      border-radius: 12px;
-      padding: 16px;
-      min-height: 550px;
+    /* Kanban Pipeline */
+    .pipeline {
+      display: flex; gap: 20px; overflow-x: auto; padding-bottom: 24px; align-items: flex-start;
     }
-    .column h3 {
+    .column-wrapper {
+      flex: 1;
+      min-width: 280px;
+      display: flex;
+      flex-direction: column;
+    }
+    .column-header {
       font-size: 13px;
       text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin: 0 0 16px 0;
-      color: #6b5c50;
-      font-weight: 600;
-    }
-    .card {
-      background: #ffffff;
-      padding: 14px;
+      letter-spacing: 1px;
+      font-weight: 700;
+      color: var(--text-dark);
+      text-align: center;
       margin-bottom: 12px;
-      border-radius: 10px;
-      border: 1px solid #e2ded5;
+    }
+    .column-content {
+      background: var(--col-bg);
+      border: 3px solid var(--border-dark);
+      border-radius: 6px;
+      padding: 12px;
+      min-height: 600px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    /* Kanban Cards */
+    .card {
+      background: var(--card-bg);
+      padding: 16px;
+      border: 2px solid var(--border-dark);
+      border-radius: 4px;
       cursor: grab;
-      box-shadow: 0 2px 6px rgba(45, 37, 30, 0.04);
+      position: relative;
     }
     .card:active { cursor: grabbing; }
-    .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
-    .btn-delete { background: transparent; border: none; color: #a8a29e; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; }
-    .btn-delete:hover { background: #fee2e2; color: #dc2626; }
-    .card-details { font-size: 13px; line-height: 1.4; width: 100%; }
-    .customer-name { font-weight: 600; color: #1c1714; }
-    .meta-text { color: #6b5c50; font-size: 12px; margin-top: 2px; }
-    .instruction-text { font-style: italic; color: #854d0e; background: #fefce8; padding: 4px 6px; border-radius: 4px; font-size: 11px; margin-top: 4px; }
-    .badge-container { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-    .tracking-badge { background: #f3ece4; color: #7a5230; border: 1px solid #e2d2c1; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
-    .branch-badge { background: #e5edf5; color: #1e40af; border: 1px solid #bfdbfe; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    
+    .card-top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+    .customer-name { font-weight: 700; font-size: 14px; color: var(--text-dark); }
+    .btn-delete { background: transparent; border: none; color: #a1a1aa; cursor: pointer; font-size: 11px; text-transform: uppercase; font-weight: 600; padding: 0; }
+    .btn-delete:hover { color: #dc2626; }
+    
+    .card-text { color: var(--text-muted); font-size: 12px; margin-bottom: 4px; line-height: 1.4; }
+    .instruction-text { font-style: italic; color: #854d0e; background: #fefce8; padding: 6px 8px; border-radius: 4px; font-size: 11px; margin-top: 8px; border-left: 2px solid #ca8a04; }
+    
+    /* Elegant Tags */
+    .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+    .tag { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .tag-branch { background: #e5e5e5; color: #525252; }
+    .tag-ncm { background: #dbeafe; color: #1e40af; }
+    .tag-vref { background: #f3ece4; color: var(--accent); }
   </style>
 </head>
 <body>
 
   <div class="header">
-    <h2>Zenzi Operations & NCM Dispatch</h2>
+    <h2>Zenzi Operations</h2>
     <div class="header-actions">
       <span class="user-badge" id="userEmail">Loading...</span>
-      <button class="btn-sync" onclick="syncNCM()">🔄 Sync NCM Status</button>
-      <button class="btn-logout" onclick="logout()">Logout</button>
+      <button class="btn btn-primary" onclick="openModal()">+ Add Order</button>
+      <button class="btn btn-secondary" onclick="syncNCM()">Sync NCM</button>
+      <button class="btn btn-danger" onclick="logout()">Logout</button>
     </div>
   </div>
 
-  <form id="orderForm">
-    <input type="text" id="name" placeholder="Customer Name *" required>
-    <input type="text" id="phone" placeholder="Primary Phone *" required>
-    <input type="text" id="phone2" placeholder="Secondary Phone (Optional)">
-    <input type="text" id="address" placeholder="Full Delivery Address *" required>
-    <input type="text" id="packageName" placeholder="Package (e.g. Tote Bag) *" required>
-    <input type="number" id="codAmount" placeholder="COD Amount (NPR) *" required>
-    
-    <input list="branchList" id="toBranch" placeholder="NCM Destination Branch *" required>
-    <datalist id="branchList"></datalist>
+  <!-- Order Entry Modal -->
+  <div class="modal-overlay" id="orderModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>New Order Entry</h3>
+        <button class="close-modal" onclick="closeModal()">&times;</button>
+      </div>
+      <form id="orderForm">
+        <input type="text" id="name" placeholder="Customer Name *" required>
+        <input type="text" id="phone" placeholder="Primary Phone *" required>
+        <input type="text" id="phone2" placeholder="Secondary Phone (Optional)">
+        <input type="text" id="packageName" placeholder="Package (e.g. Canvas Tote) *" required>
+        <input type="number" id="codAmount" placeholder="COD Amount (NPR) *" required>
+        <input list="branchList" id="toBranch" placeholder="Destination Branch *" required>
+        <datalist id="branchList"></datalist>
+        <select id="deliveryType">
+          <option value="Door2Door" selected>Door2Door Delivery</option>
+          <option value="Branch2Branch">Branch2Branch Pickup</option>
+        </select>
+        <input type="text" id="address" class="form-full" placeholder="Full Delivery Address *" required>
+        <input type="text" id="instruction" class="form-full" placeholder="Instructions / Remarks (Optional)">
+        <button type="submit" class="btn btn-primary form-full" style="padding: 14px; margin-top: 8px;">Submit Order</button>
+      </form>
+    </div>
+  </div>
 
-    <select id="deliveryType">
-      <option value="Door2Door" selected>Door2Door Delivery</option>
-      <option value="Branch2Branch">Branch2Branch Pickup</option>
-    </select>
-
-    <input type="text" id="instruction" placeholder="Instructions / Remarks (Optional)">
-    <button type="submit" class="btn-submit">Add New Order</button>
-  </form>
-
+  <!-- Kanban Board -->
   <div class="pipeline">
-    <div class="column" id="received" ondragover="allowDrop(event)" ondrop="drop(event, 'received')"><h3>Received</h3></div>
-    <div class="column" id="packed" ondragover="allowDrop(event)" ondrop="drop(event, 'packed')"><h3>Packed ⚡ (Fires API)</h3></div>
-    <div class="column" id="processing" ondragover="allowDrop(event)" ondrop="drop(event, 'processing')"><h3>Processing</h3></div>
-    <div class="column" id="hold" ondragover="allowDrop(event)" ondrop="drop(event, 'hold')"><h3>Hold Orders</h3></div>
-    <div class="column" id="problem" ondragover="allowDrop(event)" ondrop="drop(event, 'problem')"><h3>Problematic</h3></div>
-    <div class="column" id="delivered" ondragover="allowDrop(event)" ondrop="drop(event, 'delivered')"><h3>Delivered</h3></div>
+    <div class="column-wrapper">
+      <div class="column-header">Received</div>
+      <div class="column-content" id="received" ondragover="allowDrop(event)" ondrop="drop(event, 'received')"></div>
+    </div>
+    <div class="column-wrapper">
+      <div class="column-header">Packed (API)</div>
+      <div class="column-content" id="packed" ondragover="allowDrop(event)" ondrop="drop(event, 'packed')"></div>
+    </div>
+    <div class="column-wrapper">
+      <div class="column-header">Processing</div>
+      <div class="column-content" id="processing" ondragover="allowDrop(event)" ondrop="drop(event, 'processing')"></div>
+    </div>
+    <div class="column-wrapper">
+      <div class="column-header">Hold Orders</div>
+      <div class="column-content" id="hold" ondragover="allowDrop(event)" ondrop="drop(event, 'hold')"></div>
+    </div>
+    <div class="column-wrapper">
+      <div class="column-header">Problematic</div>
+      <div class="column-content" id="problem" ondragover="allowDrop(event)" ondrop="drop(event, 'problem')"></div>
+    </div>
+    <div class="column-wrapper">
+      <div class="column-header">Delivered</div>
+      <div class="column-content" id="delivered" ondragover="allowDrop(event)" ondrop="drop(event, 'delivered')"></div>
+    </div>
   </div>
 
   <script>
     const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
-
     const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // SESSION GUARD: Verify user session
+    // Modal Controls
+    function openModal() { document.getElementById('orderModal').classList.add('active'); }
+    function closeModal() { document.getElementById('orderModal').classList.remove('active'); document.getElementById('orderForm').reset(); }
+
+    // Session Verification
     dbClient.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        window.location.href = '/index.html';
-      } else {
-        document.getElementById('userEmail').innerText = session.user.email;
-      }
-    }).catch(() => {
-      window.location.href = '/index.html';
-    });
+      if (!session) window.location.href = '/index.html';
+      else document.getElementById('userEmail').innerText = session.user.email;
+    }).catch(() => { window.location.href = '/index.html'; });
 
     async function logout() {
-      try {
-        await dbClient.auth.signOut();
-      } catch (err) {
-        console.error("Logout error:", err);
-      } finally {
-        // Bulletproof fallback: clear local session tokens
-        for (let key in localStorage) {
-          if (key.startsWith('sb-')) {
-            localStorage.removeItem(key);
-          }
-        }
+      try { await dbClient.auth.signOut(); } catch (err) {}
+      finally {
+        for (let key in localStorage) if (key.startsWith('sb-')) localStorage.removeItem(key);
         window.location.href = '/index.html';
       }
     }
@@ -194,10 +260,7 @@
       const res = await fetch('/api/orders');
       const orders = await res.json();
       
-      document.querySelectorAll('.column').forEach(col => {
-        const title = col.querySelector('h3').outerHTML;
-        col.innerHTML = title;
-      });
+      document.querySelectorAll('.column-content').forEach(col => col.innerHTML = '');
 
       orders.forEach(order => {
         const div = document.createElement('div');
@@ -206,26 +269,26 @@
         div.id = `order-${order.id}`;
         div.ondragstart = (e) => e.dataTransfer.setData('id', order.id);
         
-        let trackingHtml = order.tracking_id ? `<span class="tracking-badge">📦 NCM: ${order.tracking_id}</span>` : '';
-        let vrefHtml = order.vref_id ? `<span class="tracking-badge">V-Ref: ${order.vref_id}</span>` : '';
-        let phoneText = order.phone2 ? `📞 ${order.phone_number} / ${order.phone2}` : `📞 ${order.phone_number}`;
-        let instructionHtml = order.instruction ? `<div class="instruction-text">📝 ${order.instruction}</div>` : '';
+        let trackingHtml = order.tracking_id ? `<span class="tag tag-ncm">ID: ${order.tracking_id}</span>` : '';
+        let vrefHtml = order.vref_id ? `<span class="tag tag-vref">VREF: ${order.vref_id}</span>` : '';
+        let phoneText = order.phone2 ? `${order.phone_number} / ${order.phone2}` : order.phone_number;
+        let instructionHtml = order.instruction ? `<div class="instruction-text">${order.instruction}</div>` : '';
 
         div.innerHTML = `
-          <div class="card-details">
-            <div class="card-header">
-              <div class="customer-name">${order.customer_name}</div>
-              <button class="btn-delete" onclick="deleteOrder(${order.id})" title="Delete Order">🗑️</button>
-            </div>
-            <div class="meta-text">${phoneText}</div>
-            <div class="meta-text">📍 ${order.shipping_address}</div>
-            <div class="meta-text">🛍️ ${order.package_name || 'N/A'} | NPR ${order.cod_amount || 0}</div>
-            ${instructionHtml}
-            <div class="badge-container">
-              <span class="branch-badge">🏢 ${order.to_branch || 'KALANKI'} (${order.delivery_type || 'Door2Door'})</span>
-              ${trackingHtml}
-              ${vrefHtml}
-            </div>
+          <div class="card-top-row">
+            <span class="customer-name">${order.customer_name}</span>
+            <button class="btn-delete" onclick="deleteOrder(${order.id})">Del</button>
+          </div>
+          <div class="card-text">${phoneText}</div>
+          <div class="card-text">${order.shipping_address}</div>
+          <div class="card-text" style="font-weight: 500; color: var(--text-dark); margin-top: 8px;">
+            ${order.package_name || 'N/A'} &bull; NPR ${order.cod_amount || 0}
+          </div>
+          ${instructionHtml}
+          <div class="tags">
+            <span class="tag tag-branch">${order.to_branch || 'KALANKI'} (${order.delivery_type || 'Door'})</span>
+            ${trackingHtml}
+            ${vrefHtml}
           </div>
         `;
         
@@ -236,6 +299,9 @@
 
     document.getElementById('orderForm').onsubmit = async (e) => {
       e.preventDefault();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      submitBtn.innerText = 'Submitting...'; submitBtn.disabled = true;
+
       await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -251,7 +317,9 @@
           instruction: document.getElementById('instruction').value
         })
       });
-      document.getElementById('orderForm').reset();
+      
+      submitBtn.innerText = 'Submit Order'; submitBtn.disabled = false;
+      closeModal();
       loadOrders();
     };
 
@@ -273,7 +341,7 @@
     }
 
     async function syncNCM() {
-      const btn = document.querySelector('.btn-sync');
+      const btn = document.querySelector('.btn-secondary');
       btn.innerText = 'Syncing...';
       try {
         const res = await fetch('/api/orders/sync', { method: 'POST' });
@@ -282,14 +350,12 @@
           alert(`Sync complete. ${data.synced} orders updated.`);
           loadOrders();
         }
-      } catch (err) {
-        alert('Sync failed.');
-      }
-      btn.innerText = '🔄 Sync NCM Status';
+      } catch (err) { alert('Sync failed.'); }
+      btn.innerText = 'Sync NCM';
     }
 
     async function deleteOrder(id) {
-      if (!confirm('Are you sure you want to permanently delete this order?')) return;
+      if (!confirm('Permanently delete this order?')) return;
       try {
         const res = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
         if (res.ok) loadOrders();
