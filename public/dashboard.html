@@ -6,7 +6,6 @@
   <title>Zenzi Shop Operations CRM</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
-    /* Zenzi Brand Colors & Typography */
     :root {
       --bg-main: #f6f4f0;
       --text-dark: #1c1714;
@@ -18,33 +17,46 @@
     }
 
     * { box-sizing: border-box; }
-    body {
+    
+    html, body {
+      height: 100vh;
+      width: 100vw;
+      margin: 0;
+      padding: 0;
+      overflow: hidden; /* Lock the main window */
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: var(--bg-main);
-      margin: 0;
-      padding: 32px 24px;
       color: var(--text-dark);
     }
     
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: 20px;
+    }
+
+    /* Header Navigation */
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 32px;
+      margin-bottom: 16px;
       border-bottom: 2px solid #e8e4dc;
-      padding-bottom: 16px;
+      padding-bottom: 12px;
+      flex-shrink: 0;
     }
-    h2 { font-weight: 700; font-size: 24px; letter-spacing: -0.5px; margin: 0; color: var(--text-dark); }
+    h2 { font-weight: 700; font-size: 20px; letter-spacing: -0.5px; margin: 0; color: var(--text-dark); }
     
-    .header-actions { display: flex; gap: 12px; align-items: center; }
-    .user-badge { font-size: 13px; font-weight: 500; color: var(--text-muted); }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
+    .user-badge { font-size: 12px; font-weight: 500; color: var(--text-muted); }
     
     .btn {
-      padding: 10px 18px;
+      padding: 8px 14px;
       border: none;
       border-radius: 6px;
       font-weight: 600;
-      font-size: 13px;
+      font-size: 12px;
       cursor: pointer;
       transition: background 0.2s;
     }
@@ -52,12 +64,12 @@
     .btn-primary:hover { background: var(--accent); }
     .btn-secondary { background: #e8e4dc; color: var(--text-dark); }
     .btn-secondary:hover { background: #d8d2c7; }
-    .btn-danger { background: transparent; color: #dc2626; border: 1px solid #dc2626; padding: 6px 12px; }
+    .btn-danger { background: transparent; color: #dc2626; border: 1px solid #dc2626; padding: 6px 10px; }
     .btn-danger:hover { background: #fef2f2; }
 
-    /* Modal Form Overlay */
+    /* Modal Popup */
     .modal-overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(28, 23, 20, 0.6);
       backdrop-filter: blur(4px);
       display: flex; justify-content: center; align-items: center;
@@ -69,85 +81,106 @@
     
     .modal-content {
       background: var(--card-bg);
-      padding: 32px;
+      padding: 28px;
       border-radius: 12px;
-      width: 100%; max-width: 650px;
+      width: 100%; max-width: 600px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.1);
       transform: translateY(20px);
       transition: transform 0.2s ease;
     }
     .modal-overlay.active .modal-content { transform: translateY(0); }
     
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-    .modal-header h3 { margin: 0; font-size: 18px; }
-    .close-modal { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-header h3 { margin: 0; font-size: 16px; }
+    .close-modal { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-muted); }
 
     form {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;
     }
     input, select {
-      padding: 12px 14px;
+      padding: 10px 12px;
       border: 1px solid #d8d2c7;
       border-radius: 6px;
-      font-size: 14px;
+      font-size: 13px;
       background: #faf8f5;
       outline: none; width: 100%;
     }
     input:focus, select:focus { border-color: var(--accent); background: #ffffff; }
     .form-full { grid-column: 1 / -1; }
 
-    /* Kanban Pipeline */
+    /* Fixed Viewport Kanban Board */
     .pipeline {
-      display: flex; gap: 20px; overflow-x: auto; padding-bottom: 24px; align-items: flex-start;
+      display: flex;
+      gap: 12px;
+      flex: 1;
+      height: calc(100vh - 90px);
+      width: 100%;
+      overflow: hidden;
     }
     .column-wrapper {
       flex: 1;
-      min-width: 280px;
+      min-width: 0; /* Ensures columns shrink equally to fit width */
       display: flex;
       flex-direction: column;
+      height: 100%;
     }
     .column-header {
-      font-size: 13px;
+      font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 0.8px;
       font-weight: 700;
       color: var(--text-dark);
       text-align: center;
-      margin-bottom: 12px;
-    }
-    .column-content {
-      background: var(--col-bg);
-      border: 3px solid var(--border-dark);
-      border-radius: 6px;
-      padding: 12px;
-      min-height: 600px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+      margin-bottom: 8px;
+      flex-shrink: 0;
     }
     
-    /* Kanban Cards */
+    /* Internal Column Scrollbar */
+    .column-content {
+      background: var(--col-bg);
+      border: 2px solid var(--border-dark);
+      border-radius: 6px;
+      padding: 8px;
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    /* Custom Scrollbar Styling */
+    .column-content::-webkit-scrollbar {
+      width: 4px;
+    }
+    .column-content::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    .column-content::-webkit-scrollbar-thumb {
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* Cards */
     .card {
       background: var(--card-bg);
-      padding: 16px;
-      border: 2px solid var(--border-dark);
+      padding: 12px;
+      border: 1px solid var(--border-dark);
       border-radius: 4px;
       cursor: grab;
-      position: relative;
+      flex-shrink: 0;
     }
     .card:active { cursor: grabbing; }
     
-    .card-top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
-    .customer-name { font-weight: 700; font-size: 14px; color: var(--text-dark); }
-    .btn-delete { background: transparent; border: none; color: #a1a1aa; cursor: pointer; font-size: 11px; text-transform: uppercase; font-weight: 600; padding: 0; }
+    .card-top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+    .customer-name { font-weight: 700; font-size: 13px; color: var(--text-dark); }
+    .btn-delete { background: transparent; border: none; color: #a1a1aa; cursor: pointer; font-size: 10px; text-transform: uppercase; font-weight: 600; padding: 0; }
     .btn-delete:hover { color: #dc2626; }
     
-    .card-text { color: var(--text-muted); font-size: 12px; margin-bottom: 4px; line-height: 1.4; }
-    .instruction-text { font-style: italic; color: #854d0e; background: #fefce8; padding: 6px 8px; border-radius: 4px; font-size: 11px; margin-top: 8px; border-left: 2px solid #ca8a04; }
+    .card-text { color: var(--text-muted); font-size: 11px; margin-bottom: 2px; line-height: 1.3; word-break: break-word; }
+    .instruction-text { font-style: italic; color: #854d0e; background: #fefce8; padding: 4px 6px; border-radius: 4px; font-size: 10px; margin-top: 6px; border-left: 2px solid #ca8a04; }
     
-    /* Elegant Tags */
-    .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
-    .tag { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+    .tag { padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
     .tag-branch { background: #e5e5e5; color: #525252; }
     .tag-ncm { background: #dbeafe; color: #1e40af; }
     .tag-vref { background: #f3ece4; color: var(--accent); }
@@ -155,67 +188,69 @@
 </head>
 <body>
 
-  <div class="header">
-    <h2>Zenzi Operations</h2>
-    <div class="header-actions">
-      <span class="user-badge" id="userEmail">Loading...</span>
-      <button class="btn btn-primary" onclick="openModal()">+ Add Order</button>
-      <button class="btn btn-secondary" onclick="syncNCM()">Sync NCM</button>
-      <button class="btn btn-danger" onclick="logout()">Logout</button>
-    </div>
-  </div>
-
-  <!-- Order Entry Modal -->
-  <div class="modal-overlay" id="orderModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>New Order Entry</h3>
-        <button class="close-modal" onclick="closeModal()">&times;</button>
+  <div class="app-container">
+    <div class="header">
+      <h2>Zenzi Operations</h2>
+      <div class="header-actions">
+        <span class="user-badge" id="userEmail">Loading...</span>
+        <button class="btn btn-primary" onclick="openModal()">+ Add Order</button>
+        <button class="btn btn-secondary" onclick="syncNCM()">Sync NCM</button>
+        <button class="btn btn-danger" onclick="logout()">Logout</button>
       </div>
-      <form id="orderForm">
-        <input type="text" id="name" placeholder="Customer Name *" required>
-        <input type="text" id="phone" placeholder="Primary Phone *" required>
-        <input type="text" id="phone2" placeholder="Secondary Phone (Optional)">
-        <input type="text" id="packageName" placeholder="Package (e.g. Canvas Tote) *" required>
-        <input type="number" id="codAmount" placeholder="COD Amount (NPR) *" required>
-        <input list="branchList" id="toBranch" placeholder="Destination Branch *" required>
-        <datalist id="branchList"></datalist>
-        <select id="deliveryType">
-          <option value="Door2Door" selected>Door2Door Delivery</option>
-          <option value="Branch2Branch">Branch2Branch Pickup</option>
-        </select>
-        <input type="text" id="address" class="form-full" placeholder="Full Delivery Address *" required>
-        <input type="text" id="instruction" class="form-full" placeholder="Instructions / Remarks (Optional)">
-        <button type="submit" class="btn btn-primary form-full" style="padding: 14px; margin-top: 8px;">Submit Order</button>
-      </form>
     </div>
-  </div>
 
-  <!-- Kanban Board -->
-  <div class="pipeline">
-    <div class="column-wrapper">
-      <div class="column-header">Received</div>
-      <div class="column-content" id="received" ondragover="allowDrop(event)" ondrop="drop(event, 'received')"></div>
+    <!-- Modal Entry Form -->
+    <div class="modal-overlay" id="orderModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>New Order Entry</h3>
+          <button class="close-modal" onclick="closeModal()">&times;</button>
+        </div>
+        <form id="orderForm">
+          <input type="text" id="name" placeholder="Customer Name *" required>
+          <input type="text" id="phone" placeholder="Primary Phone *" required>
+          <input type="text" id="phone2" placeholder="Secondary Phone (Optional)">
+          <input type="text" id="packageName" placeholder="Package (e.g. Canvas Tote) *" required>
+          <input type="number" id="codAmount" placeholder="COD Amount (NPR) *" required>
+          <input list="branchList" id="toBranch" placeholder="Destination Branch *" required>
+          <datalist id="branchList"></datalist>
+          <select id="deliveryType">
+            <option value="Door2Door" selected>Door2Door Delivery</option>
+            <option value="Branch2Branch">Branch2Branch Pickup</option>
+          </select>
+          <input type="text" id="address" class="form-full" placeholder="Full Delivery Address *" required>
+          <input type="text" id="instruction" class="form-full" placeholder="Instructions / Remarks (Optional)">
+          <button type="submit" class="btn btn-primary form-full" style="padding: 12px; margin-top: 6px;">Submit Order</button>
+        </form>
+      </div>
     </div>
-    <div class="column-wrapper">
-      <div class="column-header">Packed (API)</div>
-      <div class="column-content" id="packed" ondragover="allowDrop(event)" ondrop="drop(event, 'packed')"></div>
-    </div>
-    <div class="column-wrapper">
-      <div class="column-header">Processing</div>
-      <div class="column-content" id="processing" ondragover="allowDrop(event)" ondrop="drop(event, 'processing')"></div>
-    </div>
-    <div class="column-wrapper">
-      <div class="column-header">Hold Orders</div>
-      <div class="column-content" id="hold" ondragover="allowDrop(event)" ondrop="drop(event, 'hold')"></div>
-    </div>
-    <div class="column-wrapper">
-      <div class="column-header">Problematic</div>
-      <div class="column-content" id="problem" ondragover="allowDrop(event)" ondrop="drop(event, 'problem')"></div>
-    </div>
-    <div class="column-wrapper">
-      <div class="column-header">Delivered</div>
-      <div class="column-content" id="delivered" ondragover="allowDrop(event)" ondrop="drop(event, 'delivered')"></div>
+
+    <!-- Viewport-Locked Pipeline -->
+    <div class="pipeline">
+      <div class="column-wrapper">
+        <div class="column-header">Received</div>
+        <div class="column-content" id="received" ondragover="allowDrop(event)" ondrop="drop(event, 'received')"></div>
+      </div>
+      <div class="column-wrapper">
+        <div class="column-header">Packed (API)</div>
+        <div class="column-content" id="packed" ondragover="allowDrop(event)" ondrop="drop(event, 'packed')"></div>
+      </div>
+      <div class="column-wrapper">
+        <div class="column-header">Processing</div>
+        <div class="column-content" id="processing" ondragover="allowDrop(event)" ondrop="drop(event, 'processing')"></div>
+      </div>
+      <div class="column-wrapper">
+        <div class="column-header">Hold Orders</div>
+        <div class="column-content" id="hold" ondragover="allowDrop(event)" ondrop="drop(event, 'hold')"></div>
+      </div>
+      <div class="column-wrapper">
+        <div class="column-header">Problematic</div>
+        <div class="column-content" id="problem" ondragover="allowDrop(event)" ondrop="drop(event, 'problem')"></div>
+      </div>
+      <div class="column-wrapper">
+        <div class="column-header">Delivered</div>
+        <div class="column-content" id="delivered" ondragover="allowDrop(event)" ondrop="drop(event, 'delivered')"></div>
+      </div>
     </div>
   </div>
 
@@ -224,11 +259,9 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
     const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Modal Controls
     function openModal() { document.getElementById('orderModal').classList.add('active'); }
     function closeModal() { document.getElementById('orderModal').classList.remove('active'); document.getElementById('orderForm').reset(); }
 
-    // Session Verification
     dbClient.auth.getSession().then(({ data: { session } }) => {
       if (!session) window.location.href = '/index.html';
       else document.getElementById('userEmail').innerText = session.user.email;
@@ -281,7 +314,7 @@
           </div>
           <div class="card-text">${phoneText}</div>
           <div class="card-text">${order.shipping_address}</div>
-          <div class="card-text" style="font-weight: 500; color: var(--text-dark); margin-top: 8px;">
+          <div class="card-text" style="font-weight: 600; color: var(--text-dark); margin-top: 6px;">
             ${order.package_name || 'N/A'} &bull; NPR ${order.cod_amount || 0}
           </div>
           ${instructionHtml}
