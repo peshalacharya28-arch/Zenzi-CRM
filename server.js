@@ -43,8 +43,13 @@ pool.query(`
   ALTER TABLE orders ADD COLUMN IF NOT EXISTS vref_id TEXT;
 `).catch(err => console.error('Database migration error:', err));
 
+// Route handlers
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
 app.get('/api/branches', async (req, res) => {
@@ -181,7 +186,6 @@ app.post('/api/orders/sync', async (req, res) => {
   }
 });
 
-// NEW DELETE ENDPOINT
 app.delete('/api/orders/:id', async (req, res) => {
   const orderId = req.params.id;
   try {

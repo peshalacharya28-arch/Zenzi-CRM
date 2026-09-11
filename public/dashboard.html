@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zenzi Shop Operations CRM</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f6f4f0;
+      margin: 0;
+      padding: 32px 24px;
+      color: #2d251e;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    h2 { font-weight: 600; font-size: 22px; letter-spacing: -0.3px; margin: 0; color: #1c1714; }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
+    .user-badge { font-size: 12px; color: #6b5c50; background: #e8e4dc; padding: 6px 10px; border-radius: 6px; }
+    .btn-sync { background: #4a3c31; color: #fff; padding: 8px 16px; border: none; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; }
+    .btn-sync:hover { background: #2d251e; }
+    .btn-logout { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; }
+    .btn-logout:hover { background: #fecaca; }
+
+    form {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #e8e4dc;
+      margin-bottom: 28px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(45, 37, 30, 0.03);
+    }
+    input, select {
+      padding: 10px 14px;
+      border: 1px solid #d8d2c7;
+      border-radius: 8px;
+      font-size: 13px;
+      background: #faf8f5;
+      color: #2d251e;
+      outline: none;
+      width: 100%;
+    }
+    input:focus, select:focus { border-color: #7a5230; background: #ffffff; }
+    .btn-submit {
+      grid-column: 1 / -1;
+      background: #2d251e;
+      color: #ffffff;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn-submit:hover { background: #4a3c31; }
+
+    .pipeline { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 16px; }
+    .column {
+      flex: 1;
+      min-width: 260px;
+      background: #ece7df;
+      border-radius: 12px;
+      padding: 16px;
+      min-height: 550px;
+    }
+    .column h3 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin: 0 0 16px 0;
+      color: #6b5c50;
+      font-weight: 600;
+    }
+    .card {
+      background: #ffffff;
+      padding: 14px;
+      margin-bottom: 12px;
+      border-radius: 10px;
+      border: 1px solid #e2ded5;
+      cursor: grab;
+      box-shadow: 0 2px 6px rgba(45, 37, 30, 0.04);
+    }
+    .card:active { cursor: grabbing; }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+    .btn-delete { background: transparent; border: none; color: #a8a29e; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; }
+    .btn-delete:hover { background: #fee2e2; color: #dc2626; }
+    .card-details { font-size: 13px; line-height: 1.4; width: 100%; }
+    .customer-name { font-weight: 600; color: #1c1714; }
+    .meta-text { color: #6b5c50; font-size: 12px; margin-top: 2px; }
+    .instruction-text { font-style: italic; color: #854d0e; background: #fefce8; padding: 4px 6px; border-radius: 4px; font-size: 11px; margin-top: 4px; }
+    .badge-container { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .tracking-badge { background: #f3ece4; color: #7a5230; border: 1px solid #e2d2c1; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .branch-badge { background: #e5edf5; color: #1e40af; border: 1px solid #bfdbfe; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>Zenzi Operations & NCM Dispatch</h2>
+    <div class="header-actions">
+      <span class="user-badge" id="userEmail">Loading...</span>
+      <button class="btn-sync" onclick="syncNCM()">🔄 Sync NCM Status</button>
+      <button class="btn-logout" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <form id="orderForm">
+    <input type="text" id="name" placeholder="Customer Name *" required>
+    <input type="text" id="phone" placeholder="Primary Phone *" required>
+    <input type="text" id="phone2" placeholder="Secondary Phone (Optional)">
+    <input type="text" id="address" placeholder="Full Delivery Address *" required>
+    <input type="text" id="packageName" placeholder="Package (e.g. Tote Bag) *" required>
+    <input type="number" id="codAmount" placeholder="COD Amount (NPR) *" required>
+    
+    <input list="branchList" id="toBranch" placeholder="NCM Destination Branch *" required>
+    <datalist id="branchList"></datalist>
+
+    <select id="deliveryType">
+      <option value="Door2Door" selected>Door2Door Delivery</option>
+      <option value="Branch2Branch">Branch2Branch Pickup</option>
+    </select>
+
+    <input type="text" id="instruction" placeholder="Instructions / Remarks (Optional)">
+    <button type="submit" class="btn-submit">Add New Order</button>
+  </form>
+
+  <div class="pipeline">
+    <div class="column" id="received" ondragover="allowDrop(event)" ondrop="drop(event, 'received')"><h3>Received</h3></div>
+    <div class="column" id="packed" ondragover="allowDrop(event)" ondrop="drop(event, 'packed')"><h3>Packed ⚡ (Fires API)</h3></div>
+    <div class="column" id="processing" ondragover="allowDrop(event)" ondrop="drop(event, 'processing')"><h3>Processing</h3></div>
+    <div class="column" id="hold" ondragover="allowDrop(event)" ondrop="drop(event, 'hold')"><h3>Hold Orders</h3></div>
+    <div class="column" id="problem" ondragover="allowDrop(event)" ondrop="drop(event, 'problem')"><h3>Problematic</h3></div>
+    <div class="column" id="delivered" ondragover="allowDrop(event)" ondrop="drop(event, 'delivered')"><h3>Delivered</h3></div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // SESSION GUARD: Protect route from unauthenticated access
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        window.location.href = '/index.html';
+      } else {
+        document.getElementById('userEmail').innerText = session.user.email;
+      }
+    });
+
+    async function logout() {
+      await supabase.auth.signOut();
+      window.location.href = '/index.html';
+    }
+
+    async function loadBranches() {
+      try {
+        const res = await fetch('/api/branches');
+        const branches = await res.json();
+        const datalist = document.getElementById('branchList');
+        datalist.innerHTML = '';
+        branches.forEach(b => {
+          const opt = document.createElement('option');
+          opt.value = b;
+          datalist.appendChild(opt);
+        });
+      } catch (err) {}
+    }
+
+    async function loadOrders() {
+      const res = await fetch('/api/orders');
+      const orders = await res.json();
+      
+      document.querySelectorAll('.column').forEach(col => {
+        const title = col.querySelector('h3').outerHTML;
+        col.innerHTML = title;
+      });
+
+      orders.forEach(order => {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.draggable = true;
+        div.id = `order-${order.id}`;
+        div.ondragstart = (e) => e.dataTransfer.setData('id', order.id);
+        
+        let trackingHtml = order.tracking_id ? `<span class="tracking-badge">📦 NCM: ${order.tracking_id}</span>` : '';
+        let vrefHtml = order.vref_id ? `<span class="tracking-badge">V-Ref: ${order.vref_id}</span>` : '';
+        let phoneText = order.phone2 ? `📞 ${order.phone_number} / ${order.phone2}` : `📞 ${order.phone_number}`;
+        let instructionHtml = order.instruction ? `<div class="instruction-text">📝 ${order.instruction}</div>` : '';
+
+        div.innerHTML = `
+          <div class="card-details">
+            <div class="card-header">
+              <div class="customer-name">${order.customer_name}</div>
+              <button class="btn-delete" onclick="deleteOrder(${order.id})" title="Delete Order">🗑️</button>
+            </div>
+            <div class="meta-text">${phoneText}</div>
+            <div class="meta-text">📍 ${order.shipping_address}</div>
+            <div class="meta-text">🛍️ ${order.package_name || 'N/A'} | NPR ${order.cod_amount || 0}</div>
+            ${instructionHtml}
+            <div class="badge-container">
+              <span class="branch-badge">🏢 ${order.to_branch || 'KALANKI'} (${order.delivery_type || 'Door2Door'})</span>
+              ${trackingHtml}
+              ${vrefHtml}
+            </div>
+          </div>
+        `;
+        
+        const column = document.getElementById(order.status);
+        if (column) column.appendChild(div);
+      });
+    }
+
+    document.getElementById('orderForm').onsubmit = async (e) => {
+      e.preventDefault();
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: document.getElementById('name').value,
+          phone_number: document.getElementById('phone').value,
+          phone2: document.getElementById('phone2').value,
+          shipping_address: document.getElementById('address').value,
+          package_name: document.getElementById('packageName').value,
+          cod_amount: document.getElementById('codAmount').value,
+          to_branch: document.getElementById('toBranch').value,
+          delivery_type: document.getElementById('deliveryType').value,
+          instruction: document.getElementById('instruction').value
+        })
+      });
+      document.getElementById('orderForm').reset();
+      loadOrders();
+    };
+
+    function allowDrop(e) { e.preventDefault(); }
+
+    async function drop(e, newStatus) {
+      e.preventDefault();
+      const orderId = e.dataTransfer.getData('id');
+      
+      const res = await fetch(`/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      const data = await res.json();
+      if (!res.ok) alert(`API Error: ${JSON.stringify(data.details || data.error)}`);
+      loadOrders(); 
+    }
+
+    async function syncNCM() {
+      const btn = document.querySelector('.btn-sync');
+      btn.innerText = 'Syncing...';
+      try {
+        const res = await fetch('/api/orders/sync', { method: 'POST' });
+        const data = await res.json();
+        if(data.success) {
+          alert(`Sync complete. ${data.synced} orders updated.`);
+          loadOrders();
+        }
+      } catch (err) {
+        alert('Sync failed.');
+      }
+      btn.innerText = '🔄 Sync NCM Status';
+    }
+
+    async function deleteOrder(id) {
+      if (!confirm('Are you sure you want to permanently delete this order?')) return;
+      try {
+        const res = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+        if (res.ok) loadOrders();
+      } catch (err) { alert('Error deleting order.'); }
+    }
+
+    loadBranches();
+    loadOrders();
+  </script>
+</body>
+</html>
