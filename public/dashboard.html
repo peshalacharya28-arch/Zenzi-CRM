@@ -25,7 +25,7 @@
       color: var(--text-main);
     }
 
-    .container { max-width: 1300px; margin: 0 auto; }
+    .container { max-width: 1400px; margin: 0 auto; }
 
     /* Top Section */
     .section-label { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--primary-blue); margin-bottom: 4px; }
@@ -54,7 +54,7 @@
     /* Analytics Summary Cards */
     .metrics-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 16px;
       margin-bottom: 24px;
     }
@@ -62,17 +62,17 @@
       background: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      padding: 20px;
+      padding: 16px 20px;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       box-shadow: 0 1px 3px rgba(0,0,0,0.02);
     }
-    .metric-title { font-size: 13px; font-weight: 500; color: var(--text-sub); }
-    .metric-value { font-size: 26px; font-weight: 700; margin-top: 8px; color: var(--text-main); }
+    .metric-title { font-size: 12px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
+    .metric-value { font-size: 24px; font-weight: 700; margin-top: 6px; color: var(--text-main); }
     .metric-icon {
-      width: 36px; height: 36px; border-radius: 8px; background: #f0fdf4; color: #16a34a;
-      display: flex; align-items: center; justify-content: center; font-size: 16px;
+      width: 34px; height: 34px; border-radius: 8px; background: #f1f5f9; color: #334155;
+      display: flex; align-items: center; justify-content: center; font-size: 15px;
     }
 
     /* Main Table Container */
@@ -85,16 +85,16 @@
     }
 
     /* Toolbar & Controls */
-    .table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; }
-    .tabs { display: flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px; }
+    .table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
+    .tabs { display: flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px; flex-wrap: wrap; }
     .tab {
-      padding: 6px 14px; border: none; background: transparent; font-size: 13px; font-weight: 600;
+      padding: 6px 12px; border: none; background: transparent; font-size: 12px; font-weight: 600;
       color: var(--text-sub); cursor: pointer; border-radius: 6px;
     }
     .tab.active { background: #ffffff; color: var(--text-main); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 
     .search-box {
-      width: 320px; padding: 8px 12px; border: 1px solid var(--border-color);
+      width: 280px; padding: 8px 12px; border: 1px solid var(--border-color);
       border-radius: 8px; font-size: 13px; background: #fafafa; outline: none;
     }
     .search-box:focus { border-color: var(--primary-blue); background: #fff; }
@@ -153,12 +153,12 @@
     <div class="section-label">Operations Platform</div>
     <div class="header-row">
       <div>
-        <h1>Orders</h1>
-        <div class="subtitle">View every customer dispatch and track logistics integration live.</div>
+        <h1>Orders Directory</h1>
+        <div class="subtitle">Manage dispatches, monitor NCM status sync, and organize order states.</div>
       </div>
       <div style="display: flex; gap: 8px;">
         <button class="btn-action btn-primary" onclick="openModal()">+ Add Order</button>
-        <button class="btn-action" onclick="syncNCM()">Refresh NCM</button>
+        <button class="btn-action" onclick="syncNCM()">Sync NCM</button>
         <button class="btn-action" onclick="logout()">Logout</button>
       </div>
     </div>
@@ -167,30 +167,38 @@
     <div class="metrics-grid">
       <div class="metric-card">
         <div>
-          <div class="metric-title">Total Orders</div>
+          <div class="metric-title">Total</div>
           <div class="metric-value" id="count-total">0</div>
         </div>
         <div class="metric-icon">📦</div>
       </div>
       <div class="metric-card">
         <div>
-          <div class="metric-title">Dispatched / Processing</div>
+          <div class="metric-title">Packed</div>
+          <div class="metric-value" id="count-packed">0</div>
+        </div>
+        <div class="metric-icon" style="background: #fef3c7; color: #d97706;">🏷️</div>
+      </div>
+      <div class="metric-card">
+        <div>
+          <div class="metric-title">Processing</div>
           <div class="metric-value" id="count-processing">0</div>
         </div>
         <div class="metric-icon" style="background: #e0f2fe; color: #0284c7;">🚚</div>
       </div>
       <div class="metric-card">
         <div>
-          <div class="metric-title">Delivered</div>
-          <div class="metric-value" id="count-delivered">0</div>
+          <div class="metric-title">Problematic</div>
+          <div class="metric-value" id="count-problem">0</div>
         </div>
-        <div class="metric-icon" style="background: #fef3c7; color: #d97706;">✅</div>
+        <div class="metric-icon" style="background: #fee2e2; color: #dc2626;">⚠️</div>
       </div>
       <div class="metric-card">
         <div>
-          <div class="metric-title">Active User</div>
-          <div class="metric-value" id="userEmail" style="font-size: 14px; font-weight: 600; margin-top: 14px;">Loading...</div>
+          <div class="metric-title">Delivered</div>
+          <div class="metric-value" id="count-delivered">0</div>
         </div>
+        <div class="metric-icon" style="background: #dcfce7; color: #16a34a;">✅</div>
       </div>
     </div>
 
@@ -200,7 +208,10 @@
         <div class="tabs">
           <button class="tab active" onclick="filterTab('all', this)">All</button>
           <button class="tab" onclick="filterTab('received', this)">Received</button>
+          <button class="tab" onclick="filterTab('packed', this)">Packed</button>
           <button class="tab" onclick="filterTab('processing', this)">Processing</button>
+          <button class="tab" onclick="filterTab('hold', this)">Hold</button>
+          <button class="tab" onclick="filterTab('problem', this)">Problematic</button>
           <button class="tab" onclick="filterTab('delivered', this)">Delivered</button>
         </div>
         <input type="text" id="searchInput" class="search-box" placeholder="Search name, phone, or destination..." oninput="renderTable()">
@@ -218,7 +229,7 @@
           </tr>
         </thead>
         <tbody id="ordersTableBody">
-          <!-- Order rows render dynamically -->
+          <!-- Rows rendered dynamically -->
         </tbody>
       </table>
     </div>
@@ -263,7 +274,6 @@
 
     dbClient.auth.getSession().then(({ data: { session } }) => {
       if (!session) window.location.href = '/index.html';
-      else document.getElementById('userEmail').innerText = session.user.email;
     }).catch(() => { window.location.href = '/index.html'; });
 
     async function logout() {
@@ -297,7 +307,9 @@
 
     function updateMetrics() {
       document.getElementById('count-total').innerText = allOrders.length;
-      document.getElementById('count-processing').innerText = allOrders.filter(o => o.status === 'processing' || o.status === 'packed').length;
+      document.getElementById('count-packed').innerText = allOrders.filter(o => o.status === 'packed').length;
+      document.getElementById('count-processing').innerText = allOrders.filter(o => o.status === 'processing').length;
+      document.getElementById('count-problem').innerText = allOrders.filter(o => o.status === 'problem').length;
       document.getElementById('count-delivered').innerText = allOrders.filter(o => o.status === 'delivered').length;
     }
 
