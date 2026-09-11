@@ -3,70 +3,162 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zenzi Shop — Login Gateway</title>
+  <title>Zenzi Shop — Admin Access</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f6f4f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f8fafc;
       margin: 0;
-      padding: 0;
+      padding: 20px;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
-      color: #2d251e;
+      min-height: 100vh;
+      color: #0f172a;
     }
     .login-card {
       background: #ffffff;
-      padding: 32px;
-      border-radius: 12px;
-      border: 1px solid #e8e4dc;
+      padding: 40px 36px;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
       width: 100%;
-      max-width: 380px;
-      box-shadow: 0 4px 12px rgba(45, 37, 30, 0.05);
+      max-width: 420px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+      text-align: center;
     }
-    h2 { margin: 0 0 8px 0; font-size: 20px; font-weight: 600; color: #1c1714; }
-    p { margin: 0 0 24px 0; font-size: 13px; color: #6b5c50; }
+    .icon-wrapper {
+      width: 52px;
+      height: 52px;
+      background: #e0f2fe;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .icon-wrapper svg {
+      width: 22px;
+      height: 22px;
+      stroke: #0284c7;
+      stroke-width: 2;
+      fill: none;
+    }
+    h2 {
+      margin: 0 0 6px 0;
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.4px;
+    }
+    .subtitle {
+      margin: 0 0 28px 0;
+      font-size: 14px;
+      color: #64748b;
+    }
+    .form-group {
+      text-align: left;
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #334155;
+      margin-bottom: 8px;
+    }
     input {
       width: 100%;
-      padding: 12px;
-      border: 1px solid #d8d2c7;
-      border-radius: 8px;
-      font-size: 14px;
-      background: #faf8f5;
-      margin-bottom: 12px;
+      padding: 12px 16px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      font-size: 15px;
+      background: #ffffff;
+      color: #0f172a;
       outline: none;
+      transition: all 0.2s ease;
     }
-    input:focus { border-color: #7a5230; background: #ffffff; }
+    input::placeholder {
+      color: #94a3b8;
+    }
+    input:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+    }
     button {
       width: 100%;
-      background: #2d251e;
+      background: #0f172a;
       color: #ffffff;
-      padding: 12px;
+      padding: 14px;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       font-weight: 600;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 24px;
+      transition: background 0.2s ease;
     }
-    button:hover { background: #4a3c31; }
-    button:disabled { background: #8c827a; cursor: not-allowed; }
-    .msg { margin-top: 12px; font-size: 12px; text-align: center; word-break: break-word; }
-    .error { color: #dc2626; }
+    button:hover {
+      background: #1e293b;
+    }
+    button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    button svg {
+      width: 16px;
+      height: 16px;
+      stroke: #ffffff;
+      stroke-width: 2.5;
+      fill: none;
+    }
+    .msg {
+      margin-top: 16px;
+      font-size: 13px;
+      text-align: center;
+      word-break: break-word;
+    }
+    .error {
+      color: #ef4444;
+    }
   </style>
 </head>
 <body>
 
   <div class="login-card">
-    <h2>Zenzi Operations</h2>
-    <p>Sign in with your email and password to access the CRM.</p>
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      </svg>
+    </div>
+
+    <h2>Admin Access</h2>
+    <p class="subtitle">Sign in to manage your operations.</p>
 
     <form id="loginForm">
-      <input type="email" id="email" placeholder="Email address" required>
-      <input type="password" id="password" placeholder="Password" required>
-      <button type="submit" id="btn-login">Sign In</button>
+      <div class="form-group">
+        <label for="email">Username / Email</label>
+        <input type="email" id="email" placeholder="Enter your email" required>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="••••••••" required>
+      </div>
+
+      <button type="submit" id="btn-login">
+        <span>Sign In</span>
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </button>
     </form>
 
     <div id="status-msg" class="msg"></div>
@@ -91,7 +183,7 @@
       const password = document.getElementById('password').value;
 
       msg.innerText = "";
-      btn.innerText = "Authenticating...";
+      btn.querySelector('span').innerText = "Authenticating...";
       btn.disabled = true;
 
       const { data, error } = await dbClient.auth.signInWithPassword({ email, password });
@@ -99,7 +191,7 @@
       if (error) {
         msg.innerText = error.message;
         msg.className = "msg error";
-        btn.innerText = "Sign In";
+        btn.querySelector('span').innerText = "Sign In";
         btn.disabled = false;
       } else {
         window.location.href = '/dashboard.html';
