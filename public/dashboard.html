@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Zenzi Shop — Orders Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
@@ -17,26 +17,54 @@
     }
 
     * { box-sizing: border-box; }
+    
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: var(--bg-light);
       margin: 0;
-      padding: 32px;
+      padding: clamp(12px, 3vw, 32px);
       color: var(--text-main);
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .container { max-width: 1400px; margin: 0 auto; }
+    .container { max-width: 1400px; margin: 0 auto; width: 100%; }
 
     /* Top Section */
-    .section-label { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--primary-blue); margin-bottom: 4px; }
-    .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-    h1 { font-size: 28px; font-weight: 700; margin: 0; color: var(--text-main); }
-    .subtitle { font-size: 14px; color: var(--text-sub); margin-top: 4px; }
+    .section-label { 
+      font-size: 11px; 
+      font-weight: 700; 
+      letter-spacing: 1.2px; 
+      text-transform: uppercase; 
+      color: var(--primary-blue); 
+      margin-bottom: 4px; 
+    }
     
+    .header-row { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: flex-start; 
+      margin-bottom: 24px;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    
+    h1 { font-size: clamp(22px, 4vw, 28px); font-weight: 700; margin: 0; color: var(--text-main); }
+    .subtitle { font-size: 13px; color: var(--text-sub); margin-top: 4px; }
+    
+    .header-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      width: 100%;
+    }
+    @media (min-width: 640px) {
+      .header-actions { width: auto; }
+    }
+
     .btn-action {
       background: var(--card-bg);
       border: 1px solid var(--border-color);
-      padding: 10px 18px;
+      padding: 10px 16px;
       border-radius: 8px;
       font-weight: 600;
       font-size: 13px;
@@ -44,9 +72,16 @@
       color: var(--text-main);
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
       box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      flex: 1;
+      min-height: 42px;
     }
+    @media (min-width: 640px) {
+      .btn-action { flex: initial; }
+    }
+    
     .btn-action:hover { background: #f1f5f9; }
     .btn-primary { background: #0f172a; color: #fff; border: none; }
     .btn-primary:hover { background: #1e293b; }
@@ -54,65 +89,113 @@
     /* Analytics Summary Cards */
     .metrics-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
       margin-bottom: 24px;
     }
+    @media (min-width: 768px) {
+      .metrics-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (min-width: 1024px) {
+      .metrics-grid { grid-template-columns: repeat(5, 1fr); gap: 16px; }
+    }
+
     .metric-card {
       background: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      padding: 16px 20px;
+      padding: 14px 16px;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       box-shadow: 0 1px 3px rgba(0,0,0,0.02);
     }
-    .metric-title { font-size: 12px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
-    .metric-value { font-size: 24px; font-weight: 700; margin-top: 6px; color: var(--text-main); }
+    .metric-title { font-size: 11px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
+    .metric-value { font-size: clamp(20px, 3vw, 24px); font-weight: 700; margin-top: 4px; color: var(--text-main); }
     .metric-icon {
-      width: 34px; height: 34px; border-radius: 8px; background: #f1f5f9; color: #334155;
-      display: flex; align-items: center; justify-content: center; font-size: 15px;
+      width: 32px; height: 32px; border-radius: 8px; background: #f1f5f9; color: #334155;
+      display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
     }
 
-    /* Main Table Container */
+    /* Main Container */
     .table-card {
       background: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      padding: 20px;
+      padding: clamp(14px, 2vw, 20px);
       box-shadow: 0 1px 3px rgba(0,0,0,0.02);
     }
 
     /* Toolbar & Controls */
-    .table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
-    .tabs { display: flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px; flex-wrap: wrap; }
+    .table-toolbar { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      margin-bottom: 20px; 
+      gap: 12px; 
+      flex-direction: column; 
+    }
+    @media (min-width: 768px) {
+      .table-toolbar { flex-direction: row; }
+    }
+
+    .tabs { 
+      display: flex; 
+      background: #f1f5f9; 
+      padding: 4px; 
+      border-radius: 8px; 
+      gap: 4px; 
+      overflow-x: auto; 
+      width: 100%;
+      -webkit-overflow-scrolling: touch;
+    }
+    @media (min-width: 768px) {
+      .tabs { width: auto; }
+    }
+
     .tab {
-      padding: 6px 12px; border: none; background: transparent; font-size: 12px; font-weight: 600;
-      color: var(--text-sub); cursor: pointer; border-radius: 6px;
+      padding: 8px 12px; 
+      border: none; 
+      background: transparent; 
+      font-size: 12px; 
+      font-weight: 600;
+      color: var(--text-sub); 
+      cursor: pointer; 
+      border-radius: 6px;
+      white-space: nowrap;
+      flex: 1;
+      text-align: center;
     }
     .tab.active { background: #ffffff; color: var(--text-main); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 
     .search-box {
-      width: 280px; padding: 8px 12px; border: 1px solid var(--border-color);
-      border-radius: 8px; font-size: 13px; background: #fafafa; outline: none;
+      width: 100%; 
+      padding: 10px 14px; 
+      border: 1px solid var(--border-color);
+      border-radius: 8px; 
+      font-size: 13px; 
+      background: #fafafa; 
+      outline: none;
+    }
+    @media (min-width: 768px) {
+      .search-box { width: 280px; }
     }
     .search-box:focus { border-color: var(--primary-blue); background: #fff; }
 
-    /* Table Styles */
-    table { width: 100%; border-collapse: collapse; text-align: left; }
+    /* Table Component */
+    .table-wrapper { width: 100%; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; min-width: 600px; }
     th {
       font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
-      color: var(--text-sub); padding: 12px 16px; border-bottom: 1px solid var(--border-color);
+      color: var(--text-sub); padding: 12px 14px; border-bottom: 1px solid var(--border-color);
     }
-    td { padding: 16px; border-bottom: 1px solid var(--border-color); font-size: 13px; vertical-align: middle; }
+    td { padding: 14px; border-bottom: 1px solid var(--border-color); font-size: 13px; vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
     tr:hover { background: #f8fafc; }
 
     .cust-name { font-weight: 700; color: var(--text-main); display: block; }
     .cust-sub { font-size: 12px; color: var(--text-sub); display: block; margin-top: 2px; }
 
-    /* In-Row Interactive Status Select Box */
     .status-select {
       padding: 6px 10px;
       border-radius: 20px;
@@ -124,26 +207,56 @@
       color: var(--text-main);
       cursor: pointer;
       outline: none;
+      min-height: 36px;
     }
     .status-select:focus { border-color: var(--primary-blue); }
 
-    /* Modal Styling */
+    /* Responsive Modal Styling */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);
-      display: flex; justify-content: center; align-items: center; z-index: 1000;
+      display: flex; justify-content: center; align-items: flex-end; z-index: 1000;
       opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+      padding: 0;
     }
-    .modal-overlay.active { opacity: 1; pointer-events: auto; }
-    .modal-content {
-      background: #fff; padding: 28px; border-radius: 12px; width: 100%; max-width: 580px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.1); border: 1px solid var(--border-color);
+    @media (min-width: 640px) {
+      .modal-overlay { align-items: center; padding: 20px; }
     }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-sub); }
     
-    form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    form input, form select { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; outline: none; }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    
+    .modal-content {
+      background: #fff; 
+      padding: 24px; 
+      border-radius: 16px 16px 0 0; 
+      width: 100%; 
+      max-width: 580px;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.1); 
+      border: 1px solid var(--border-color);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    @media (min-width: 640px) {
+      .modal-content { border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    }
+    
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-sub); padding: 4px; }
+    
+    form { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 640px) {
+      form { grid-template-columns: repeat(2, 1fr); }
+    }
+    
+    form input, form select { 
+      padding: 12px; 
+      border: 1px solid var(--border-color); 
+      border-radius: 8px; 
+      font-size: 14px; 
+      outline: none;
+      width: 100%;
+    }
+    
     .full-width { grid-column: 1 / -1; }
   </style>
 </head>
@@ -156,7 +269,7 @@
         <h1>Orders Directory</h1>
         <div class="subtitle">Manage dispatches, monitor NCM status sync, and organize order states.</div>
       </div>
-      <div style="display: flex; gap: 8px;">
+      <div class="header-actions">
         <button class="btn-action btn-primary" onclick="openModal()">+ Add Order</button>
         <button class="btn-action" onclick="syncNCM()">Sync NCM</button>
         <button class="btn-action" onclick="logout()">Logout</button>
@@ -193,7 +306,7 @@
         </div>
         <div class="metric-icon" style="background: #fee2e2; color: #dc2626;">⚠️</div>
       </div>
-      <div class="metric-card">
+      <div class="metric-card" style="grid-column: span 2;">
         <div>
           <div class="metric-title">Delivered</div>
           <div class="metric-value" id="count-delivered">0</div>
@@ -211,27 +324,29 @@
           <button class="tab" onclick="filterTab('packed', this)">Packed</button>
           <button class="tab" onclick="filterTab('processing', this)">Processing</button>
           <button class="tab" onclick="filterTab('hold', this)">Hold</button>
-          <button class="tab" onclick="filterTab('problem', this)">Problematic</button>
+          <button class="tab" onclick="filterTab('problem', this)">Problem</button>
           <button class="tab" onclick="filterTab('delivered', this)">Delivered</button>
         </div>
-        <input type="text" id="searchInput" class="search-box" placeholder="Search name, phone, or destination..." oninput="renderTable()">
+        <input type="text" id="searchInput" class="search-box" placeholder="Search name, phone, or branch..." oninput="renderTable()">
       </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Customer</th>
-            <th>Package</th>
-            <th>COD Amount</th>
-            <th>Destination</th>
-            <th>NCM Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="ordersTableBody">
-          <!-- Rows rendered dynamically -->
-        </tbody>
-      </table>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Package</th>
+              <th>COD Amount</th>
+              <th>Destination</th>
+              <th>NCM Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ordersTableBody">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -239,7 +354,7 @@
   <div class="modal-overlay" id="orderModal">
     <div class="modal-content">
       <div class="modal-header">
-        <h3 style="margin: 0;">Create New Order</h3>
+        <h3 style="margin: 0; font-size: 18px;">Create New Order</h3>
         <button class="close-btn" onclick="closeModal()">&times;</button>
       </div>
       <form id="orderForm">
@@ -256,7 +371,7 @@
         </select>
         <input type="text" id="address" class="full-width" placeholder="Full Delivery Address *" required>
         <input type="text" id="instruction" class="full-width" placeholder="Delivery Instructions (Optional)">
-        <button type="submit" class="btn-action btn-primary full-width" style="padding: 12px; margin-top: 10px;">Save Order</button>
+        <button type="submit" class="btn-action btn-primary full-width" style="padding: 14px; margin-top: 6px;">Save Order</button>
       </form>
     </div>
   </div>
