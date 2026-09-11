@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zenzi Shop — Login Gateway</title>
-  <!-- Explicit UMD bundle to guarantee window.supabase loads properly -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     * { box-sizing: border-box; }
@@ -54,29 +53,21 @@
     }
     button:hover { background: #4a3c31; }
     button:disabled { background: #8c827a; cursor: not-allowed; }
-    .hidden { display: none; }
     .msg { margin-top: 12px; font-size: 12px; text-align: center; word-break: break-word; }
     .error { color: #dc2626; }
-    .info { color: #16a34a; }
   </style>
 </head>
 <body>
 
   <div class="login-card">
     <h2>Zenzi Operations</h2>
-    <p>Sign in with your authorized email to access the CRM.</p>
+    <p>Sign in with your email and password to access the CRM.</p>
 
-    <!-- STEP 1: Request OTP -->
-    <div id="step-email">
-      <input type="email" id="email" placeholder="name@zenzishop.com" required>
-      <button onclick="sendOTP()" id="btn-send">Send Verification Code</button>
-    </div>
-
-    <!-- STEP 2: Verify OTP -->
-    <div id="step-otp" class="hidden">
-      <input type="text" id="otp" placeholder="Enter 8-digit OTP" required maxlength="8">
-      <button onclick="verifyOTP()" id="btn-verify">Verify & Enter CRM</button>
-    </div>
+    <form id="loginForm">
+      <input type="email" id="email" placeholder="Email address" required>
+      <input type="password" id="password" placeholder="Password" required>
+      <button type="submit" id="btn-login">Sign In</button>
+    </form>
 
     <div id="status-msg" class="msg"></div>
   </div>
@@ -85,105 +76,35 @@
     const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
 
-    let dbClient = null;
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Safely initialize client without overwriting global modules
-    if (window.supabase && window.supabase.createClient) {
-      dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    } else {
+    // Auto-redirect if already authenticated
+    dbClient.auth.getSession().then(({ data: { session } }) => {
+      if (session) window.location.href = '/dashboard.html';
+    });
+
+    document.getElementById('loginForm').onsubmit = async (e) => {
+      e.preventDefault();
       const msg = document.getElementById('status-msg');
-      msg.innerText = "Error: Supabase SDK failed to load. Please check your network.";
-      msg.className = "msg error";
-    }
-
-    if (dbClient) {
-      dbClient.auth.getSession().then(({ data: { session } }) => {
-        if (session) window.location.href = '/dashboard.html';
-      }).catch(err => console.error("Session check error:", err));
-    }
-
-    async function sendOTP() {
-      const msg = document.getElementById('status-msg');
-      const btn = document.getElementById('btn-send');
+      const btn = document.getElementById('btn-login');
       const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
 
       msg.innerText = "";
-      msg.className = "msg";
-
-      if (!email) {
-        msg.innerText = "Please enter your email address.";
-        msg.className = "msg error";
-        return;
-      }
-
-      if (!dbClient) {
-        msg.innerText = "Database connection failed to load.";
-        msg.className = "msg error";
-        return;
-      }
-
-      btn.innerText = "Sending...";
+      btn.innerText = "Authenticating...";
       btn.disabled = true;
 
-      try {
-        const { error } = await dbClient.auth.signInWithOtp({ email });
+      const { data, error } = await dbClient.auth.signInWithPassword({ email, password });
 
-        if (error) {
-          msg.innerText = error.message;
-          msg.className = "msg error";
-          btn.innerText = "Send Verification Code";
-          btn.disabled = false;
-        } else {
-          msg.innerText = "OTP sent to your email! Check your inbox.";
-          msg.className = "msg info";
-          document.getElementById('step-email').classList.add('hidden');
-          document.getElementById('step-otp').classList.remove('hidden');
-        }
-      } catch (err) {
-        msg.innerText = "Unexpected Error: " + err.message;
+      if (error) {
+        msg.innerText = error.message;
         msg.className = "msg error";
-        btn.innerText = "Send Verification Code";
+        btn.innerText = "Sign In";
         btn.disabled = false;
+      } else {
+        window.location.href = '/dashboard.html';
       }
-    }
-
-    async function verifyOTP() {
-      const msg = document.getElementById('status-msg');
-      const btn = document.getElementById('btn-verify');
-      const email = document.getElementById('email').value.trim();
-      const token = document.getElementById('otp').value.trim();
-
-      if (!token) {
-        msg.innerText = "Please enter the verification code.";
-        msg.className = "msg error";
-        return;
-      }
-
-      btn.innerText = "Verifying...";
-      btn.disabled = true;
-
-      try {
-        const { data, error } = await dbClient.auth.verifyOtp({
-          email: email,
-          token: token,
-          type: 'email'
-        });
-
-        if (error) {
-          msg.innerText = error.message;
-          msg.className = "msg error";
-          btn.innerText = "Verify & Enter CRM";
-          btn.disabled = false;
-        } else {
-          window.location.href = '/dashboard.html';
-        }
-      } catch (err) {
-        msg.innerText = "Unexpected Error: " + err.message;
-        msg.className = "msg error";
-        btn.innerText = "Verify & Enter CRM";
-        btn.disabled = false;
-      }
-    }
+    };
   </script>
 </body>
 </html>
