@@ -178,7 +178,7 @@
       outline: none;
     }
     @media (min-width: 768px) {
-      .search-box { width: 280px; }
+      .search-box { width: 320px; }
     }
     .search-box:focus { border-color: var(--primary-blue); background: #fff; }
 
@@ -327,7 +327,7 @@
           <button class="tab" onclick="filterTab('problem', this)">Problem</button>
           <button class="tab" onclick="filterTab('delivered', this)">Delivered</button>
         </div>
-        <input type="text" id="searchInput" class="search-box" placeholder="Search name, phone, or branch..." oninput="renderTable()">
+        <input type="text" id="searchInput" class="search-box" placeholder="Search name, phone, address, or branch..." oninput="renderTable()">
       </div>
 
       <div class="table-wrapper">
@@ -435,18 +435,43 @@
       renderTable();
     }
 
+    // MULTI-FIELD SEARCH LOGIC
     function renderTable() {
       const tbody = document.getElementById('ordersTableBody');
-      const search = document.getElementById('searchInput').value.toLowerCase();
+      const search = document.getElementById('searchInput').value.trim().toLowerCase();
       tbody.innerHTML = '';
 
       const filtered = allOrders.filter(o => {
         const matchesTab = currentFilter === 'all' || o.status === currentFilter;
-        const matchesSearch = o.customer_name.toLowerCase().includes(search) || 
-                              o.phone_number.includes(search) || 
-                              (o.to_branch && o.to_branch.toLowerCase().includes(search));
+        
+        // Comprehensive string matching across all key properties
+        const nameMatch = (o.customer_name || '').toLowerCase().includes(search);
+        const phone1Match = (o.phone_number || '').toLowerCase().includes(search);
+        const phone2Match = (o.phone2 || '').toLowerCase().includes(search);
+        const addressMatch = (o.shipping_address || '').toLowerCase().includes(search);
+        const packageMatch = (o.package_name || '').toLowerCase().includes(search);
+        const branchMatch = (o.to_branch || '').toLowerCase().includes(search);
+        const trackingMatch = (o.tracking_id || '').toLowerCase().includes(search);
+        const vrefMatch = (o.vref_id || '').toLowerCase().includes(search);
+
+        const matchesSearch = search === '' || (
+          nameMatch || phone1Match || phone2Match || addressMatch || 
+          packageMatch || branchMatch || trackingMatch || vrefMatch
+        );
+
         return matchesTab && matchesSearch;
       });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-sub); padding: 32px;">
+              No matching orders found.
+            </td>
+          </tr>
+        `;
+        return;
+      }
 
       filtered.forEach(o => {
         const tr = document.createElement('tr');
