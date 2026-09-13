@@ -80,9 +80,7 @@
       outline: none;
       transition: all 0.2s ease;
     }
-    input::placeholder {
-      color: #94a3b8;
-    }
+    input::placeholder { color: #94a3b8; }
     input:focus {
       border-color: #38bdf8;
       box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
@@ -104,29 +102,11 @@
       margin-top: 24px;
       transition: background 0.2s ease;
     }
-    button:hover {
-      background: #1e293b;
-    }
-    button:disabled {
-      background: #94a3b8;
-      cursor: not-allowed;
-    }
-    button svg {
-      width: 16px;
-      height: 16px;
-      stroke: #ffffff;
-      stroke-width: 2.5;
-      fill: none;
-    }
-    .msg {
-      margin-top: 16px;
-      font-size: 13px;
-      text-align: center;
-      word-break: break-word;
-    }
-    .error {
-      color: #ef4444;
-    }
+    button:hover { background: #1e293b; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    button svg { width: 16px; height: 16px; stroke: #ffffff; stroke-width: 2.5; fill: none; }
+    .msg { margin-top: 16px; font-size: 13px; text-align: center; word-break: break-word; }
+    .error { color: #ef4444; }
   </style>
 </head>
 <body>
@@ -169,7 +149,6 @@
     const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
 
-    // CRITICAL SECURITY UPDATE: Use sessionStorage so sessions die on tab close
     const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         storage: window.sessionStorage,
@@ -177,7 +156,6 @@
       }
     });
 
-    // Wipe any legacy localStorage tokens from previous sessions
     for (let key in localStorage) {
       if (key.startsWith('sb-')) localStorage.removeItem(key);
     }

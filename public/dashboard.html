@@ -116,7 +116,7 @@
       background: var(--accent-badge); color: var(--text-main); cursor: pointer; outline: none; min-height: 36px;
     }
 
-    /* Shared Modal Layout */
+    /* Modal Layout */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);
@@ -136,7 +136,6 @@
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-sub); padding: 4px; }
 
-    /* Product Row Items */
     .product-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
     .product-row select { flex: 2; }
     .product-row input[type="number"] { flex: 1; }
@@ -367,7 +366,6 @@
     const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
 
-    // ENFORCE SESSION STORAGE (Session dies on tab close)
     const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         storage: window.sessionStorage,
@@ -375,9 +373,32 @@
       }
     });
 
-    // 20-MINUTE INACTIVITY AUTO-LOGOUT TIMER
+    let currentAccessToken = "";
+
+    // Helper: Authenticated API Fetch Wrapper
+    async function authFetch(url, options = {}) {
+      if (!currentAccessToken) {
+        const sessionRes = await dbClient.auth.getSession();
+        currentAccessToken = sessionRes.data?.session?.access_token || "";
+      }
+
+      options.headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${currentAccessToken}`,
+        'Content-Type': 'application/json'
+      };
+
+      const res = await fetch(url, options);
+      if (res.status === 401 || res.status === 403) {
+        alert("Security Session Expired. Please log in again.");
+        logout();
+      }
+      return res;
+    }
+
+    // 20-MINUTE INACTIVITY TIMER
     let inactivityTimer;
-    const INACTIVITY_LIMIT = 20 * 60 * 1000; // 20 minutes in milliseconds
+    const INACTIVITY_LIMIT = 20 * 60 * 1000;
 
     function resetInactivityTimer() {
       clearTimeout(inactivityTimer);
@@ -387,7 +408,6 @@
       }, INACTIVITY_LIMIT);
     }
 
-    // Bind activity detectors
     ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
       window.addEventListener(evt, resetInactivityTimer, true);
     });
@@ -431,9 +451,16 @@
       document.getElementById('analyticsModal').classList.remove('active');
     }
 
-    // Verify session from sessionStorage
+    // Session Verification
     dbClient.auth.getSession().then(({ data: { session } }) => {
-      if (!session) window.location.href = '/index.html';
+      if (!session) {
+        window.location.href = '/index.html';
+      } else {
+        currentAccessToken = session.access_token;
+        loadBranches();
+        fetchInventory();
+        fetchOrders();
+      }
     }).catch(() => { window.location.href = '/index.html'; });
 
     async function logout() {
@@ -448,7 +475,7 @@
     // INVENTORY MANAGEMENT & SEARCH LOGIC
     async function fetchInventory() {
       try {
-        const res = await fetch('/api/inventory');
+        const res = await authFetch('/api/inventory');
         inventoryList = await res.json();
         renderInventoryTable();
       } catch (err) {}
@@ -495,9 +522,8 @@
 
     document.getElementById('inventoryForm').onsubmit = async (e) => {
       e.preventDefault();
-      await fetch('/api/inventory', {
+      await authFetch('/api/inventory', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           product_name: document.getElementById('invProductName').value.trim(),
           sku: document.getElementById('invSKU').value.trim(),
@@ -509,9 +535,8 @@
     };
 
     async function adjustStock(id, adjustment) {
-      await fetch(`/api/inventory/${id}/stock`, {
+      await authFetch(`/api/inventory/${id}/stock`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ adjustment })
       });
       await fetchInventory();
@@ -519,14 +544,14 @@
 
     async function deleteInventoryItem(id) {
       if (!confirm('Delete this product from inventory?')) return;
-      await fetch(`/api/inventory/${id}`, { method: 'DELETE' });
+      await authFetch(`/api/inventory/${id}`, { method: 'DELETE' });
       await fetchInventory();
     }
 
     // GROWTH ANALYTICS LOGIC
     async function fetchAnalytics() {
       try {
-        const res = await fetch('/api/analytics');
+        const res = await authFetch('/api/analytics');
         const data = await res.json();
 
         document.getElementById('growth-today').innerText = data.todayOrders;
@@ -575,7 +600,7 @@
     // ORDERS LOGIC
     async function loadBranches() {
       try {
-        const res = await fetch('/api/branches');
+        const res = await authFetch('/api/branches');
         const branches = await res.json();
         const datalist = document.getElementById('branchList');
         datalist.innerHTML = '';
@@ -588,7 +613,7 @@
     }
 
     async function fetchOrders() {
-      const res = await fetch('/api/orders');
+      const res = await authFetch('/api/orders');
       allOrders = await res.json();
       updateMetrics();
       renderTable();
@@ -689,9 +714,8 @@
         instruction: document.getElementById('instruction').value
       };
 
-      const res = await fetch('/api/orders', {
+      const res = await authFetch('/api/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
@@ -707,9 +731,8 @@
     };
 
     async function updateOrderStatus(id, newStatus) {
-      const res = await fetch(`/api/orders/${id}/status`, {
+      const res = await authFetch(`/api/orders/${id}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
       });
       const data = await res.json();
@@ -719,7 +742,7 @@
 
     async function syncNCM() {
       try {
-        const res = await fetch('/api/orders/sync', { method: 'POST' });
+        const res = await authFetch('/api/orders/sync', { method: 'POST' });
         const data = await res.json();
         if(data.success) {
           alert(`Sync complete. ${data.synced} orders updated.`);
@@ -730,13 +753,9 @@
 
     async function deleteOrder(id) {
       if (!confirm('Delete this order permanently?')) return;
-      await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+      await authFetch(`/api/orders/${id}`, { method: 'DELETE' });
       fetchOrders();
     }
-
-    loadBranches();
-    fetchInventory();
-    fetchOrders();
   </script>
 </body>
 </html>

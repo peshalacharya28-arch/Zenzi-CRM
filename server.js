@@ -3,22 +3,42 @@ const { Pool } = require('pg');
 const axios = require('axios');
 const cors = require('cors');
 const path = require('path');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
+// 1. HTTP Security Headers
+app.use(helmet({
+  contentSecurityPolicy: false // Allows external Supabase CDN & Google Fonts scripts
+}));
+
+// 2. API Rate Limiting (100 requests per 15 minutes per IP)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests from this IP. Please wait a few minutes.' }
+});
+app.use('/api/', apiLimiter);
+
 app.use(express.static(path.join(__dirname, 'public')));
 
-const NCM_TOKEN = process.env.NCM_TOKEN || '6f33ba16bc5faf0902cc53ed920e78b75906b555';
+const NCM_TOKEN = process.env.NCM_TOKEN || '6543202e39d2b90776037483b546f2fb2d3d93c4';
 const NCM_FROM_BRANCH = 'KALANKI';
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://pnecdxsqaevyvsnibdcu.supabase.co";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
+
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// Database Migration Setup
+// 3. Database Migration & RLS Lock Down
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -43,13 +63,46 @@ pool.query(`
     stock_quantity INT DEFAULT 0,
     sku TEXT
   );
-`).catch(err => console.error('Database migration error:', err));
+
+  -- ENABLE ROW LEVEL SECURITY
+  ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
+
+  -- DENY PUBLIC ANON ACCESS BY DEFAULT
+  DO $$ 
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Deny Public Orders') THEN
+      CREATE POLICY "Deny Public Orders" ON orders FOR ALL USING (false);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Deny Public Inventory') THEN
+      CREATE POLICY "Deny Public Inventory" ON inventory FOR ALL USING (false);
+    END IF;
+  END $$;
+`).catch(err => console.error('Database security initialization error:', err));
+
+// 4. JWT Authentication Middleware
+const verifyAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing token' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !user) {
+    return res.status(403).json({ error: 'Forbidden: Invalid or expired session token' });
+  }
+
+  req.user = user;
+  next();
+};
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 
-// --- INVENTORY API ENDPOINTS ---
-app.get('/api/inventory', async (req, res) => {
+// --- INVENTORY API ENDPOINTS (PROTECTED) ---
+app.get('/api/inventory', verifyAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM inventory ORDER BY product_name ASC');
     res.json(result.rows);
@@ -58,7 +111,7 @@ app.get('/api/inventory', async (req, res) => {
   }
 });
 
-app.post('/api/inventory', async (req, res) => {
+app.post('/api/inventory', verifyAuth, async (req, res) => {
   const { product_name, stock_quantity, sku } = req.body;
   try {
     const result = await pool.query(
@@ -75,7 +128,7 @@ app.post('/api/inventory', async (req, res) => {
   }
 });
 
-app.patch('/api/inventory/:id/stock', async (req, res) => {
+app.patch('/api/inventory/:id/stock', verifyAuth, async (req, res) => {
   const { adjustment } = req.body;
   try {
     const result = await pool.query(
@@ -88,7 +141,7 @@ app.patch('/api/inventory/:id/stock', async (req, res) => {
   }
 });
 
-app.delete('/api/inventory/:id', async (req, res) => {
+app.delete('/api/inventory/:id', verifyAuth, async (req, res) => {
   try {
     await pool.query('DELETE FROM inventory WHERE id = $1', [req.params.id]);
     res.json({ success: true });
@@ -97,15 +150,13 @@ app.delete('/api/inventory/:id', async (req, res) => {
   }
 });
 
-// --- ANALYTICAL & GROWTH METRICS API ---
-app.get('/api/analytics', async (req, res) => {
+// --- ANALYTICAL & GROWTH METRICS API (PROTECTED) ---
+app.get('/api/analytics', verifyAuth, async (req, res) => {
   try {
     const totalOrdersRes = await pool.query('SELECT COUNT(*) FROM orders');
     const todayOrdersRes = await pool.query('SELECT COUNT(*) FROM orders WHERE created_at >= CURRENT_DATE');
     const totalRevenueRes = await pool.query('SELECT SUM(CAST(NULLIF(cod_amount, \'\') AS NUMERIC)) FROM orders WHERE status != \'problem\'');
     const deliveredCountRes = await pool.query('SELECT COUNT(*) FROM orders WHERE status = \'delivered\'');
-    
-    // Top Branches Breakdown
     const branchBreakdownRes = await pool.query(
       'SELECT to_branch, COUNT(*) as count FROM orders GROUP BY to_branch ORDER BY count DESC LIMIT 5'
     );
@@ -114,7 +165,6 @@ app.get('/api/analytics', async (req, res) => {
     const todayOrders = parseInt(todayOrdersRes.rows[0].count) || 0;
     const totalRevenue = parseFloat(totalRevenueRes.rows[0].sum) || 0;
     const deliveredCount = parseInt(deliveredCountRes.rows[0].count) || 0;
-    
     const conversionRate = totalOrders > 0 ? ((deliveredCount / totalOrders) * 100).toFixed(1) : 0;
 
     res.json({
@@ -130,8 +180,8 @@ app.get('/api/analytics', async (req, res) => {
   }
 });
 
-// --- ORDERS API ENDPOINTS ---
-app.get('/api/branches', async (req, res) => {
+// --- ORDERS API ENDPOINTS (PROTECTED) ---
+app.get('/api/branches', verifyAuth, async (req, res) => {
   try {
     const response = await axios.get('https://portal.nepalcanmove.com/api/v2/branches', {
       headers: { 'Authorization': `Token ${NCM_TOKEN}` },
@@ -144,7 +194,7 @@ app.get('/api/branches', async (req, res) => {
   }
 });
 
-app.get('/api/orders', async (req, res) => {
+app.get('/api/orders', verifyAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM orders ORDER BY id DESC');
     res.json(result.rows);
@@ -153,7 +203,7 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
-app.post('/api/orders', async (req, res) => {
+app.post('/api/orders', verifyAuth, async (req, res) => {
   const { 
     customer_name, phone_number, phone2, shipping_address, 
     items, cod_amount, to_branch, instruction, delivery_type 
@@ -210,7 +260,7 @@ app.post('/api/orders', async (req, res) => {
   }
 });
 
-app.patch('/api/orders/:id/status', async (req, res) => {
+app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
   const { status } = req.body;
   const orderId = req.params.id;
 
@@ -265,7 +315,7 @@ app.patch('/api/orders/:id/status', async (req, res) => {
   }
 });
 
-app.post('/api/orders/sync', async (req, res) => {
+app.post('/api/orders/sync', verifyAuth, async (req, res) => {
   try {
     const activeOrders = await pool.query("SELECT * FROM orders WHERE tracking_id IS NOT NULL AND status IN ('packed', 'processing')");
     let updatedCount = 0;
@@ -295,7 +345,7 @@ app.post('/api/orders/sync', async (req, res) => {
   }
 });
 
-app.delete('/api/orders/:id', async (req, res) => {
+app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
   try {
     await pool.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
     res.json({ success: true });
