@@ -18,7 +18,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Database Migration Setup (Price removed from inventory)
+// Database Migration Setup
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -33,7 +33,8 @@ pool.query(`
     delivery_type TEXT DEFAULT 'Door2Door',
     status TEXT DEFAULT 'received',
     tracking_id TEXT,
-    vref_id TEXT
+    vref_id TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS inventory (
@@ -93,6 +94,39 @@ app.delete('/api/inventory/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete inventory item' });
+  }
+});
+
+// --- ANALYTICAL & GROWTH METRICS API ---
+app.get('/api/analytics', async (req, res) => {
+  try {
+    const totalOrdersRes = await pool.query('SELECT COUNT(*) FROM orders');
+    const todayOrdersRes = await pool.query('SELECT COUNT(*) FROM orders WHERE created_at >= CURRENT_DATE');
+    const totalRevenueRes = await pool.query('SELECT SUM(CAST(NULLIF(cod_amount, \'\') AS NUMERIC)) FROM orders WHERE status != \'problem\'');
+    const deliveredCountRes = await pool.query('SELECT COUNT(*) FROM orders WHERE status = \'delivered\'');
+    
+    // Top Branches Breakdown
+    const branchBreakdownRes = await pool.query(
+      'SELECT to_branch, COUNT(*) as count FROM orders GROUP BY to_branch ORDER BY count DESC LIMIT 5'
+    );
+
+    const totalOrders = parseInt(totalOrdersRes.rows[0].count) || 0;
+    const todayOrders = parseInt(todayOrdersRes.rows[0].count) || 0;
+    const totalRevenue = parseFloat(totalRevenueRes.rows[0].sum) || 0;
+    const deliveredCount = parseInt(deliveredCountRes.rows[0].count) || 0;
+    
+    const conversionRate = totalOrders > 0 ? ((deliveredCount / totalOrders) * 100).toFixed(1) : 0;
+
+    res.json({
+      totalOrders,
+      todayOrders,
+      totalRevenue,
+      deliveredCount,
+      conversionRate: `${conversionRate}%`,
+      topBranches: branchBreakdownRes.rows
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to calculate growth metrics' });
   }
 });
 
