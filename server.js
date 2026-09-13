@@ -10,7 +10,7 @@ app.use(cors());
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const NCM_TOKEN = process.env.NCM_TOKEN || '6543202e39d2b90776037483b546f2fb2d3d93c4';
+const NCM_TOKEN = process.env.NCM_TOKEN || '6f33ba16bc5faf0902cc53ed920e78b75906b555';
 const NCM_FROM_BRANCH = 'KALANKI';
 
 const pool = new Pool({
