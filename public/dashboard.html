@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <link rel="icon" href="favicon.png">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Zenzi Shop — Orders Dashboard</title>
+  <title>Zenzi Shop — Operations Portal</title>
+  <link rel="icon" type="image/png" href="/favicon.png?v=2">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     :root {
@@ -116,7 +116,7 @@
       background: var(--accent-badge); color: var(--text-main); cursor: pointer; outline: none; min-height: 36px;
     }
 
-    /* Modal Overlay */
+    /* Shared Modal Layout */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);
@@ -136,7 +136,7 @@
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-sub); padding: 4px; }
 
-    /* Multi-Product Builder Rows */
+    /* Product Row Items */
     .product-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
     .product-row select { flex: 2; }
     .product-row input[type="number"] { flex: 1; }
@@ -147,7 +147,6 @@
     form input, form select { padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; outline: none; width: 100%; }
     .full-width { grid-column: 1 / -1; }
 
-    /* Stock Status Badges */
     .badge-stock { padding: 4px 8px; border-radius: 12px; font-weight: 700; font-size: 11px; }
     .stock-ok { background: #dcfce7; color: #15803d; }
     .stock-low { background: #fee2e2; color: #b91c1c; }
@@ -165,6 +164,7 @@
       <div class="header-actions">
         <button class="btn-action btn-primary" onclick="openOrderModal()">+ Add Order</button>
         <button class="btn-action" onclick="openInventoryModal()">📦 Inventory & Stock</button>
+        <button class="btn-action" onclick="openAnalyticsModal()">📊 Analytics</button>
         <button class="btn-action" onclick="syncNCM()">Sync NCM</button>
         <button class="btn-action" onclick="logout()">Logout</button>
       </div>
@@ -254,7 +254,6 @@
         <input type="text" id="phone" placeholder="Primary Phone *" required>
         <input type="text" id="phone2" placeholder="Secondary Phone (Optional)">
         
-        <!-- Multi-Product Builder Section -->
         <div class="full-width" style="border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; background: #fafafa;">
           <label style="font-size: 12px; font-weight: 700; color: var(--text-sub); display: block; margin-bottom: 8px;">PRODUCTS IN ORDER</label>
           <div id="productRowsContainer"></div>
@@ -275,23 +274,25 @@
     </div>
   </div>
 
-  <!-- INVENTORY & STOCK MANAGEMENT MODAL -->
+  <!-- INVENTORY MODAL WITH SEARCH -->
   <div class="modal-overlay" id="inventoryModal">
-    <div class="modal-content" style="max-width: 750px;">
+    <div class="modal-content" style="max-width: 800px;">
       <div class="modal-header">
         <h3 style="margin: 0; font-size: 18px;">Stock Inventory Management</h3>
         <button class="close-btn" onclick="closeInventoryModal()">&times;</button>
       </div>
       
-      <!-- Add New Product Form -->
-      <form id="inventoryForm" style="margin-bottom: 20px; padding: 12px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 8px;">
+      <form id="inventoryForm" style="margin-bottom: 16px; padding: 12px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 8px;">
         <input type="text" id="invProductName" placeholder="Product Name *" required>
         <input type="text" id="invSKU" placeholder="SKU Code (Optional)">
         <input type="number" id="invStock" placeholder="Stock Quantity *" required min="0">
         <button type="submit" class="btn-action btn-primary full-width" style="padding: 8px;">Add / Update Product</button>
       </form>
 
-      <!-- Current Inventory Table -->
+      <div style="margin-bottom: 12px;">
+        <input type="text" id="invSearchInput" class="search-box" style="width: 100%;" placeholder="🔍 Search product name or SKU..." oninput="renderInventoryTable()">
+      </div>
+
       <div class="table-wrapper">
         <table>
           <thead>
@@ -312,10 +313,85 @@
     </div>
   </div>
 
+  <!-- GROWTH ANALYTICS MODAL -->
+  <div class="modal-overlay" id="analyticsModal">
+    <div class="modal-content" style="max-width: 750px;">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 18px;">Growth & Operations Analytics</h3>
+        <button class="close-btn" onclick="closeAnalyticsModal()">&times;</button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px;">
+        <div class="metric-card">
+          <div>
+            <div class="metric-title">Today's Orders</div>
+            <div class="metric-value" id="growth-today">0</div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div>
+            <div class="metric-title">Total COD Generated</div>
+            <div class="metric-value" id="growth-revenue" style="font-size: 18px; margin-top:8px;">NPR 0</div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div>
+            <div class="metric-title">Delivery Rate</div>
+            <div class="metric-value" id="growth-rate">0%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-card" style="padding: 12px;">
+        <div class="section-label" style="margin-bottom: 8px;">Top Destination Branches</div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Branch Name</th>
+                <th>Orders Handled</th>
+              </tr>
+            </thead>
+            <tbody id="branchBreakdownBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px; text-align: right;">
+        <button class="btn-action" onclick="closeAnalyticsModal()">Escape / Close</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
-    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ENFORCE SESSION STORAGE (Session dies on tab close)
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        storage: window.sessionStorage,
+        persistSession: true
+      }
+    });
+
+    // 20-MINUTE INACTIVITY AUTO-LOGOUT TIMER
+    let inactivityTimer;
+    const INACTIVITY_LIMIT = 20 * 60 * 1000; // 20 minutes in milliseconds
+
+    function resetInactivityTimer() {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(async () => {
+        alert("Session expired due to 20 minutes of inactivity.");
+        await logout();
+      }, INACTIVITY_LIMIT);
+    }
+
+    // Bind activity detectors
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, resetInactivityTimer, true);
+    });
+    resetInactivityTimer();
 
     let allOrders = [];
     let inventoryList = [];
@@ -325,6 +401,7 @@
       if (e.key === 'Escape') {
         closeOrderModal();
         closeInventoryModal();
+        closeAnalyticsModal();
       }
     });
 
@@ -346,6 +423,15 @@
       document.getElementById('inventoryModal').classList.remove('active');
     }
 
+    function openAnalyticsModal() {
+      fetchAnalytics();
+      document.getElementById('analyticsModal').classList.add('active');
+    }
+    function closeAnalyticsModal() {
+      document.getElementById('analyticsModal').classList.remove('active');
+    }
+
+    // Verify session from sessionStorage
     dbClient.auth.getSession().then(({ data: { session } }) => {
       if (!session) window.location.href = '/index.html';
     }).catch(() => { window.location.href = '/index.html'; });
@@ -353,12 +439,13 @@
     async function logout() {
       try { await dbClient.auth.signOut(); } catch (err) {}
       finally {
+        sessionStorage.clear();
         for (let key in localStorage) if (key.startsWith('sb-')) localStorage.removeItem(key);
         window.location.href = '/index.html';
       }
     }
 
-    // INVENTORY MANAGEMENT LOGIC
+    // INVENTORY MANAGEMENT & SEARCH LOGIC
     async function fetchInventory() {
       try {
         const res = await fetch('/api/inventory');
@@ -369,12 +456,21 @@
 
     function renderInventoryTable() {
       const tbody = document.getElementById('inventoryTableBody');
+      const search = (document.getElementById('invSearchInput').value || '').trim().toLowerCase();
       tbody.innerHTML = '';
-      if (inventoryList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-sub);">No inventory items recorded yet.</td></tr>`;
+
+      const filtered = inventoryList.filter(item => {
+        const nameMatch = (item.product_name || '').toLowerCase().includes(search);
+        const skuMatch = (item.sku || '').toLowerCase().includes(search);
+        return nameMatch || skuMatch;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-sub);">No inventory items match your search.</td></tr>`;
         return;
       }
-      inventoryList.forEach(item => {
+
+      filtered.forEach(item => {
         const tr = document.createElement('tr');
         const isLow = item.stock_quantity <= 2;
         tr.innerHTML = `
@@ -425,6 +521,34 @@
       if (!confirm('Delete this product from inventory?')) return;
       await fetch(`/api/inventory/${id}`, { method: 'DELETE' });
       await fetchInventory();
+    }
+
+    // GROWTH ANALYTICS LOGIC
+    async function fetchAnalytics() {
+      try {
+        const res = await fetch('/api/analytics');
+        const data = await res.json();
+
+        document.getElementById('growth-today').innerText = data.todayOrders;
+        document.getElementById('growth-revenue').innerText = `NPR ${data.totalRevenue.toLocaleString()}`;
+        document.getElementById('growth-rate').innerText = data.conversionRate;
+
+        const branchTbody = document.getElementById('branchBreakdownBody');
+        branchTbody.innerHTML = '';
+        if (data.topBranches.length === 0) {
+          branchTbody.innerHTML = `<tr><td colspan="2" style="text-align:center;">No branch data recorded yet.</td></tr>`;
+          return;
+        }
+
+        data.topBranches.forEach(b => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>${b.to_branch || 'KALANKI'}</strong></td>
+            <td>${b.count} orders</td>
+          `;
+          branchTbody.appendChild(tr);
+        });
+      } catch (err) {}
     }
 
     // MULTI-PRODUCT BUILDER LOGIC

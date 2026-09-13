@@ -1,718 +1,213 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <link rel="icon" href="/favicon.png">  
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Zenzi Shop — Operations Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zenzi Shop — Admin Access</title>
+  <link rel="icon" type="image/png" href="/favicon.png?v=2">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
-    :root {
-      --bg-light: #f8fafc;
-      --card-bg: #ffffff;
-      --text-main: #0f172a;
-      --text-sub: #64748b;
-      --border-color: #e2e8f0;
-      --primary-blue: #0284c7;
-      --accent-badge: #f1f5f9;
-    }
-
     * { box-sizing: border-box; }
-    
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg-light);
+      background: #f8fafc;
       margin: 0;
-      padding: clamp(12px, 3vw, 32px);
-      color: var(--text-main);
-      -webkit-tap-highlight-color: transparent;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #0f172a;
     }
-
-    .container { max-width: 1400px; margin: 0 auto; width: 100%; }
-
-    .section-label { 
-      font-size: 11px; font-weight: 700; letter-spacing: 1.2px; 
-      text-transform: uppercase; color: var(--primary-blue); margin-bottom: 4px; 
+    .login-card {
+      background: #ffffff;
+      padding: 40px 36px;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+      text-align: center;
     }
-    
-    .header-row { 
-      display: flex; justify-content: space-between; align-items: flex-start; 
-      margin-bottom: 24px; gap: 16px; flex-wrap: wrap;
+    .icon-wrapper {
+      width: 52px;
+      height: 52px;
+      background: #e0f2fe;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
     }
-    
-    h1 { font-size: clamp(22px, 4vw, 28px); font-weight: 700; margin: 0; color: var(--text-main); }
-    .subtitle { font-size: 13px; color: var(--text-sub); margin-top: 4px; }
-    
-    .header-actions { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
-    @media (min-width: 640px) { .header-actions { width: auto; } }
-
-    .btn-action {
-      background: var(--card-bg); border: 1px solid var(--border-color);
-      padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 13px;
-      cursor: pointer; color: var(--text-main); display: inline-flex;
-      align-items: center; justify-content: center; gap: 6px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05); flex: 1; min-height: 42px;
+    .icon-wrapper svg {
+      width: 22px;
+      height: 22px;
+      stroke: #0284c7;
+      stroke-width: 2;
+      fill: none;
     }
-    @media (min-width: 640px) { .btn-action { flex: initial; } }
-    
-    .btn-action:hover { background: #f1f5f9; }
-    .btn-primary { background: #0f172a; color: #fff; border: none; }
-    .btn-primary:hover { background: #1e293b; }
-
-    /* Summary Metrics */
-    .metrics-grid {
-      display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px;
+    h2 {
+      margin: 0 0 6px 0;
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.4px;
     }
-    @media (min-width: 768px) { .metrics-grid { grid-template-columns: repeat(3, 1fr); } }
-    @media (min-width: 1024px) { .metrics-grid { grid-template-columns: repeat(5, 1fr); gap: 16px; } }
-
-    .metric-card {
-      background: var(--card-bg); border: 1px solid var(--border-color);
-      border-radius: 12px; padding: 14px 16px; display: flex;
-      justify-content: space-between; align-items: flex-start;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    .subtitle {
+      margin: 0 0 28px 0;
+      font-size: 14px;
+      color: #64748b;
     }
-    .metric-title { font-size: 11px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
-    .metric-value { font-size: clamp(20px, 3vw, 24px); font-weight: 700; margin-top: 4px; color: var(--text-main); }
-    .metric-icon {
-      width: 32px; height: 32px; border-radius: 8px; background: #f1f5f9; color: #334155;
-      display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+    .form-group {
+      text-align: left;
+      margin-bottom: 20px;
     }
-
-    /* Table Component */
-    .table-card {
-      background: var(--card-bg); border: 1px solid var(--border-color);
-      border-radius: 12px; padding: clamp(14px, 2vw, 20px); box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #334155;
+      margin-bottom: 8px;
     }
-
-    .table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-direction: column; }
-    @media (min-width: 768px) { .table-toolbar { flex-direction: row; } }
-
-    .tabs { display: flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px; overflow-x: auto; width: 100%; }
-    @media (min-width: 768px) { .tabs { width: auto; } }
-
-    .tab {
-      padding: 8px 12px; border: none; background: transparent; font-size: 12px; font-weight: 600;
-      color: var(--text-sub); cursor: pointer; border-radius: 6px; white-space: nowrap; flex: 1; text-align: center;
+    input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      font-size: 15px;
+      background: #ffffff;
+      color: #0f172a;
+      outline: none;
+      transition: all 0.2s ease;
     }
-    .tab.active { background: #ffffff; color: var(--text-main); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-
-    .search-box { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; background: #fafafa; outline: none; }
-    @media (min-width: 768px) { .search-box { width: 320px; } }
-
-    .table-wrapper { width: 100%; overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; text-align: left; min-width: 600px; }
-    th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-sub); padding: 12px 14px; border-bottom: 1px solid var(--border-color); }
-    td { padding: 14px; border-bottom: 1px solid var(--border-color); font-size: 13px; vertical-align: middle; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover { background: #f8fafc; }
-
-    .cust-name { font-weight: 700; color: var(--text-main); display: block; }
-    .cust-sub { font-size: 12px; color: var(--text-sub); display: block; margin-top: 2px; }
-
-    .status-select {
-      padding: 6px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
-      text-transform: uppercase; border: 1px solid var(--border-color);
-      background: var(--accent-badge); color: var(--text-main); cursor: pointer; outline: none; min-height: 36px;
+    input::placeholder {
+      color: #94a3b8;
     }
-
-    /* Shared Modal Layout */
-    .modal-overlay {
-      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);
-      display: flex; justify-content: center; align-items: flex-end; z-index: 1000;
-      opacity: 0; pointer-events: none; transition: opacity 0.2s ease; padding: 0;
+    input:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
     }
-    @media (min-width: 640px) { .modal-overlay { align-items: center; padding: 20px; } }
-    .modal-overlay.active { opacity: 1; pointer-events: auto; }
-    
-    .modal-content {
-      background: #fff; padding: 24px; border-radius: 16px 16px 0 0; width: 100%;
-      max-width: 650px; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); border: 1px solid var(--border-color);
-      max-height: 90vh; overflow-y: auto;
+    button {
+      width: 100%;
+      background: #0f172a;
+      color: #ffffff;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 24px;
+      transition: background 0.2s ease;
     }
-    @media (min-width: 640px) { .modal-content { border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); } }
-    
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-sub); padding: 4px; }
-
-    /* Product Row Items */
-    .product-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-    .product-row select { flex: 2; }
-    .product-row input[type="number"] { flex: 1; }
-    .btn-remove-row { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
-
-    form { display: grid; grid-template-columns: 1fr; gap: 12px; }
-    @media (min-width: 640px) { form { grid-template-columns: repeat(2, 1fr); } }
-    form input, form select { padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; outline: none; width: 100%; }
-    .full-width { grid-column: 1 / -1; }
-
-    .badge-stock { padding: 4px 8px; border-radius: 12px; font-weight: 700; font-size: 11px; }
-    .stock-ok { background: #dcfce7; color: #15803d; }
-    .stock-low { background: #fee2e2; color: #b91c1c; }
+    button:hover {
+      background: #1e293b;
+    }
+    button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    button svg {
+      width: 16px;
+      height: 16px;
+      stroke: #ffffff;
+      stroke-width: 2.5;
+      fill: none;
+    }
+    .msg {
+      margin-top: 16px;
+      font-size: 13px;
+      text-align: center;
+      word-break: break-word;
+    }
+    .error {
+      color: #ef4444;
+    }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <div class="section-label">Operations Platform</div>
-    <div class="header-row">
-      <div>
-        <h1>Orders Directory</h1>
-        <div class="subtitle">Manage dispatches, monitor stock levels, and sync logistics.</div>
-      </div>
-      <div class="header-actions">
-        <button class="btn-action btn-primary" onclick="openOrderModal()">+ Add Order</button>
-        <button class="btn-action" onclick="openInventoryModal()">📦 Inventory & Stock</button>
-        <button class="btn-action" onclick="openAnalyticsModal()">📊 Analytics</button>
-        <button class="btn-action" onclick="syncNCM()">Sync NCM</button>
-        <button class="btn-action" onclick="logout()">Logout</button>
-      </div>
+  <div class="login-card">
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      </svg>
     </div>
 
-    <!-- Summary Metrics -->
-    <div class="metrics-grid">
-      <div class="metric-card">
-        <div>
-          <div class="metric-title">Total Orders</div>
-          <div class="metric-value" id="count-total">0</div>
-        </div>
-        <div class="metric-icon">📦</div>
-      </div>
-      <div class="metric-card">
-        <div>
-          <div class="metric-title">Packed</div>
-          <div class="metric-value" id="count-packed">0</div>
-        </div>
-        <div class="metric-icon" style="background: #fef3c7; color: #d97706;">🏷️</div>
-      </div>
-      <div class="metric-card">
-        <div>
-          <div class="metric-title">Processing</div>
-          <div class="metric-value" id="count-processing">0</div>
-        </div>
-        <div class="metric-icon" style="background: #e0f2fe; color: #0284c7;">🚚</div>
-      </div>
-      <div class="metric-card">
-        <div>
-          <div class="metric-title">Problematic</div>
-          <div class="metric-value" id="count-problem">0</div>
-        </div>
-        <div class="metric-icon" style="background: #fee2e2; color: #dc2626;">⚠️</div>
-      </div>
-      <div class="metric-card" style="grid-column: span 2;">
-        <div>
-          <div class="metric-title">Delivered</div>
-          <div class="metric-value" id="count-delivered">0</div>
-        </div>
-        <div class="metric-icon" style="background: #dcfce7; color: #16a34a;">✅</div>
-      </div>
-    </div>
+    <h2>Admin Access</h2>
+    <p class="subtitle">Sign in to manage your operations.</p>
 
-    <!-- Table Container -->
-    <div class="table-card">
-      <div class="table-toolbar">
-        <div class="tabs">
-          <button class="tab active" onclick="filterTab('all', this)">All</button>
-          <button class="tab" onclick="filterTab('received', this)">Received</button>
-          <button class="tab" onclick="filterTab('packed', this)">Packed</button>
-          <button class="tab" onclick="filterTab('processing', this)">Processing</button>
-          <button class="tab" onclick="filterTab('hold', this)">Hold</button>
-          <button class="tab" onclick="filterTab('problem', this)">Problem</button>
-          <button class="tab" onclick="filterTab('delivered', this)">Delivered</button>
-        </div>
-        <input type="text" id="searchInput" class="search-box" placeholder="Search name, phone, address, or item..." oninput="renderTable()">
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="email">Username / Email</label>
+        <input type="email" id="email" placeholder="Enter your email" required>
       </div>
 
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th>Package / Items</th>
-              <th>COD Amount</th>
-              <th>Destination</th>
-              <th>NCM Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="ordersTableBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ORDER ENTRY MODAL -->
-  <div class="modal-overlay" id="orderModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 style="margin: 0; font-size: 18px;">Create New Order</h3>
-        <button class="close-btn" onclick="closeOrderModal()">&times;</button>
-      </div>
-      <form id="orderForm">
-        <input type="text" id="name" placeholder="Customer Name *" required>
-        <input type="text" id="phone" placeholder="Primary Phone *" required>
-        <input type="text" id="phone2" placeholder="Secondary Phone (Optional)">
-        
-        <div class="full-width" style="border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; background: #fafafa;">
-          <label style="font-size: 12px; font-weight: 700; color: var(--text-sub); display: block; margin-bottom: 8px;">PRODUCTS IN ORDER</label>
-          <div id="productRowsContainer"></div>
-          <button type="button" class="btn-action" style="font-size: 12px; padding: 6px 12px; margin-top: 4px;" onclick="addProductRow()">+ Add Another Item</button>
-        </div>
-
-        <input type="number" id="codAmount" placeholder="Custom COD Amount (NPR) *" required>
-        <input list="branchList" id="toBranch" placeholder="NCM Branch *" required>
-        <datalist id="branchList"></datalist>
-        <select id="deliveryType" class="full-width">
-          <option value="Door2Door" selected>Door2Door Delivery</option>
-          <option value="Branch2Branch">Branch2Branch Pickup</option>
-        </select>
-        <input type="text" id="address" class="full-width" placeholder="Full Delivery Address *" required>
-        <input type="text" id="instruction" class="full-width" placeholder="Delivery Instructions (Optional)">
-        <button type="submit" class="btn-action btn-primary full-width" style="padding: 14px; margin-top: 6px;">Save Order & Deduct Stock</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- INVENTORY MODAL WITH SEARCH -->
-  <div class="modal-overlay" id="inventoryModal">
-    <div class="modal-content" style="max-width: 800px;">
-      <div class="modal-header">
-        <h3 style="margin: 0; font-size: 18px;">Stock Inventory Management</h3>
-        <button class="close-btn" onclick="closeInventoryModal()">&times;</button>
-      </div>
-      
-      <form id="inventoryForm" style="margin-bottom: 16px; padding: 12px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 8px;">
-        <input type="text" id="invProductName" placeholder="Product Name *" required>
-        <input type="text" id="invSKU" placeholder="SKU Code (Optional)">
-        <input type="number" id="invStock" placeholder="Stock Quantity *" required min="0">
-        <button type="submit" class="btn-action btn-primary full-width" style="padding: 8px;">Add / Update Product</button>
-      </form>
-
-      <!-- Inventory Search Bar -->
-      <div style="margin-bottom: 12px;">
-        <input type="text" id="invSearchInput" class="search-box" style="width: 100%;" placeholder="🔍 Search product name or SKU..." oninput="renderInventoryTable()">
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="••••••••" required>
       </div>
 
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Product Name</th>
-              <th>SKU</th>
-              <th>Stock Level</th>
-              <th>Adjust</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="inventoryTableBody"></tbody>
-        </table>
-      </div>
-      <div style="margin-top: 16px; text-align: right;">
-        <button class="btn-action" onclick="closeInventoryModal()">Escape / Close</button>
-      </div>
-    </div>
-  </div>
+      <button type="submit" id="btn-login">
+        <span>Sign In</span>
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </button>
+    </form>
 
-  <!-- GROWTH ANALYTICS MODAL -->
-  <div class="modal-overlay" id="analyticsModal">
-    <div class="modal-content" style="max-width: 750px;">
-      <div class="modal-header">
-        <h3 style="margin: 0; font-size: 18px;">Growth & Operations Analytics</h3>
-        <button class="close-btn" onclick="closeAnalyticsModal()">&times;</button>
-      </div>
-
-      <!-- Growth Overview Cards -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px;">
-        <div class="metric-card">
-          <div>
-            <div class="metric-title">Today's Orders</div>
-            <div class="metric-value" id="growth-today">0</div>
-          </div>
-        </div>
-        <div class="metric-card">
-          <div>
-            <div class="metric-title">Total COD Generated</div>
-            <div class="metric-value" id="growth-revenue" style="font-size: 18px; margin-top:8px;">NPR 0</div>
-          </div>
-        </div>
-        <div class="metric-card">
-          <div>
-            <div class="metric-title">Delivery Rate</div>
-            <div class="metric-value" id="growth-rate">0%</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Branch Logistics Breakdown Table -->
-      <div class="table-card" style="padding: 12px;">
-        <div class="section-label" style="margin-bottom: 8px;">Top Destination Branches</div>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Branch Name</th>
-                <th>Orders Handled</th>
-              </tr>
-            </thead>
-            <tbody id="branchBreakdownBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div style="margin-top: 16px; text-align: right;">
-        <button class="btn-action" onclick="closeAnalyticsModal()">Escape / Close</button>
-      </div>
-    </div>
+    <div id="status-msg" class="msg"></div>
   </div>
 
   <script>
     const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
-    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    let allOrders = [];
-    let inventoryList = [];
-    let currentFilter = 'all';
-
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        closeOrderModal();
-        closeInventoryModal();
-        closeAnalyticsModal();
+    // CRITICAL SECURITY UPDATE: Use sessionStorage so sessions die on tab close
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        storage: window.sessionStorage,
+        persistSession: true
       }
     });
 
-    function openOrderModal() {
-      document.getElementById('productRowsContainer').innerHTML = '';
-      addProductRow();
-      document.getElementById('orderModal').classList.add('active');
-    }
-    function closeOrderModal() {
-      document.getElementById('orderModal').classList.remove('active');
-      document.getElementById('orderForm').reset();
-    }
-
-    function openInventoryModal() {
-      fetchInventory();
-      document.getElementById('inventoryModal').classList.add('active');
-    }
-    function closeInventoryModal() {
-      document.getElementById('inventoryModal').classList.remove('active');
-    }
-
-    function openAnalyticsModal() {
-      fetchAnalytics();
-      document.getElementById('analyticsModal').classList.add('active');
-    }
-    function closeAnalyticsModal() {
-      document.getElementById('analyticsModal').classList.remove('active');
+    // Wipe any legacy localStorage tokens from previous sessions
+    for (let key in localStorage) {
+      if (key.startsWith('sb-')) localStorage.removeItem(key);
     }
 
     dbClient.auth.getSession().then(({ data: { session } }) => {
-      if (!session) window.location.href = '/index.html';
-    }).catch(() => { window.location.href = '/index.html'; });
+      if (session) window.location.href = '/dashboard.html';
+    });
 
-    async function logout() {
-      try { await dbClient.auth.signOut(); } catch (err) {}
-      finally {
-        for (let key in localStorage) if (key.startsWith('sb-')) localStorage.removeItem(key);
-        window.location.href = '/index.html';
-      }
-    }
-
-    // INVENTORY MANAGEMENT & SEARCH LOGIC
-    async function fetchInventory() {
-      try {
-        const res = await fetch('/api/inventory');
-        inventoryList = await res.json();
-        renderInventoryTable();
-      } catch (err) {}
-    }
-
-    function renderInventoryTable() {
-      const tbody = document.getElementById('inventoryTableBody');
-      const search = (document.getElementById('invSearchInput').value || '').trim().toLowerCase();
-      tbody.innerHTML = '';
-
-      const filtered = inventoryList.filter(item => {
-        const nameMatch = (item.product_name || '').toLowerCase().includes(search);
-        const skuMatch = (item.sku || '').toLowerCase().includes(search);
-        return nameMatch || skuMatch;
-      });
-
-      if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-sub);">No inventory items match your search.</td></tr>`;
-        return;
-      }
-
-      filtered.forEach(item => {
-        const tr = document.createElement('tr');
-        const isLow = item.stock_quantity <= 2;
-        tr.innerHTML = `
-          <td><strong>${item.product_name}</strong></td>
-          <td>${item.sku || '-'}</td>
-          <td>
-            <span class="badge-stock ${isLow ? 'stock-low' : 'stock-ok'}">
-              ${item.stock_quantity} available
-            </span>
-          </td>
-          <td>
-            <button class="btn-action" style="padding:2px 6px; min-height:unset;" onclick="adjustStock(${item.id}, 1)">+1</button>
-            <button class="btn-action" style="padding:2px 6px; min-height:unset;" onclick="adjustStock(${item.id}, -1)">-1</button>
-          </td>
-          <td>
-            <button class="btn-action" style="color:#dc2626; padding:2px 6px; min-height:unset;" onclick="deleteInventoryItem(${item.id})">Del</button>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    document.getElementById('inventoryForm').onsubmit = async (e) => {
+    document.getElementById('loginForm').onsubmit = async (e) => {
       e.preventDefault();
-      await fetch('/api/inventory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product_name: document.getElementById('invProductName').value.trim(),
-          sku: document.getElementById('invSKU').value.trim(),
-          stock_quantity: document.getElementById('invStock').value
-        })
-      });
-      document.getElementById('inventoryForm').reset();
-      await fetchInventory();
-    };
+      const msg = document.getElementById('status-msg');
+      const btn = document.getElementById('btn-login');
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
 
-    async function adjustStock(id, adjustment) {
-      await fetch(`/api/inventory/${id}/stock`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adjustment })
-      });
-      await fetchInventory();
-    }
+      msg.innerText = "";
+      btn.querySelector('span').innerText = "Authenticating...";
+      btn.disabled = true;
 
-    async function deleteInventoryItem(id) {
-      if (!confirm('Delete this product from inventory?')) return;
-      await fetch(`/api/inventory/${id}`, { method: 'DELETE' });
-      await fetchInventory();
-    }
+      const { data, error } = await dbClient.auth.signInWithPassword({ email, password });
 
-    // GROWTH ANALYTICS LOGIC
-    async function fetchAnalytics() {
-      try {
-        const res = await fetch('/api/analytics');
-        const data = await res.json();
-
-        document.getElementById('growth-today').innerText = data.todayOrders;
-        document.getElementById('growth-revenue').innerText = `NPR ${data.totalRevenue.toLocaleString()}`;
-        document.getElementById('growth-rate').innerText = data.conversionRate;
-
-        const branchTbody = document.getElementById('branchBreakdownBody');
-        branchTbody.innerHTML = '';
-        if (data.topBranches.length === 0) {
-          branchTbody.innerHTML = `<tr><td colspan="2" style="text-align:center;">No branch data recorded yet.</td></tr>`;
-          return;
-        }
-
-        data.topBranches.forEach(b => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td><strong>${b.to_branch || 'KALANKI'}</strong></td>
-            <td>${b.count} orders</td>
-          `;
-          branchTbody.appendChild(tr);
-        });
-      } catch (err) {}
-    }
-
-    // MULTI-PRODUCT BUILDER LOGIC
-    function addProductRow() {
-      const container = document.getElementById('productRowsContainer');
-      const row = document.createElement('div');
-      row.className = 'product-row';
-
-      let options = inventoryList.map(item => 
-        `<option value="${item.product_name}">${item.product_name} (${item.stock_quantity} in stock)</option>`
-      ).join('');
-
-      row.innerHTML = `
-        <select class="prod-select" required>
-          <option value="" disabled selected>Select Product...</option>
-          ${options}
-        </select>
-        <input type="number" class="prod-qty" value="1" min="1" placeholder="Qty" required>
-        <button type="button" class="btn-remove-row" onclick="this.parentElement.remove();">&times;</button>
-      `;
-      container.appendChild(row);
-    }
-
-    // ORDERS LOGIC
-    async function loadBranches() {
-      try {
-        const res = await fetch('/api/branches');
-        const branches = await res.json();
-        const datalist = document.getElementById('branchList');
-        datalist.innerHTML = '';
-        branches.forEach(b => {
-          const opt = document.createElement('option');
-          opt.value = b;
-          datalist.appendChild(opt);
-        });
-      } catch (err) {}
-    }
-
-    async function fetchOrders() {
-      const res = await fetch('/api/orders');
-      allOrders = await res.json();
-      updateMetrics();
-      renderTable();
-    }
-
-    function updateMetrics() {
-      document.getElementById('count-total').innerText = allOrders.length;
-      document.getElementById('count-packed').innerText = allOrders.filter(o => o.status === 'packed').length;
-      document.getElementById('count-processing').innerText = allOrders.filter(o => o.status === 'processing').length;
-      document.getElementById('count-problem').innerText = allOrders.filter(o => o.status === 'problem').length;
-      document.getElementById('count-delivered').innerText = allOrders.filter(o => o.status === 'delivered').length;
-    }
-
-    function filterTab(status, element) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      element.classList.add('active');
-      currentFilter = status;
-      renderTable();
-    }
-
-    function renderTable() {
-      const tbody = document.getElementById('ordersTableBody');
-      const search = document.getElementById('searchInput').value.trim().toLowerCase();
-      tbody.innerHTML = '';
-
-      const filtered = allOrders.filter(o => {
-        const matchesTab = currentFilter === 'all' || o.status === currentFilter;
-        const searchStr = [
-          o.customer_name, o.phone_number, o.phone2, o.shipping_address, 
-          o.package_name, o.to_branch, o.tracking_id, o.vref_id
-        ].join(' ').toLowerCase();
-        
-        return matchesTab && (search === '' || searchStr.includes(search));
-      });
-
-      if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color: var(--text-sub); padding:32px;">No orders found.</td></tr>`;
-        return;
+      if (error) {
+        msg.innerText = error.message;
+        msg.className = "msg error";
+        btn.querySelector('span').innerText = "Sign In";
+        btn.disabled = false;
+      } else {
+        window.location.href = '/dashboard.html';
       }
-
-      filtered.forEach(o => {
-        const tr = document.createElement('tr');
-        let phoneText = o.phone2 ? `${o.phone_number} / ${o.phone2}` : o.phone_number;
-        let trackingText = o.tracking_id ? `NCM ID: ${o.tracking_id}` : 'Not Dispatched';
-
-        tr.innerHTML = `
-          <td>
-            <span class="cust-name">${o.customer_name}</span>
-            <span class="cust-sub">${phoneText} &bull; ${o.shipping_address}</span>
-          </td>
-          <td>
-            <span class="cust-name">${o.package_name || 'N/A'}</span>
-            <span class="cust-sub">${o.instruction ? 'Note: ' + o.instruction : ''}</span>
-          </td>
-          <td><strong>NPR ${o.cod_amount || 0}</strong></td>
-          <td>
-            <span class="cust-name">${o.to_branch || 'KALANKI'}</span>
-            <span class="cust-sub">${o.delivery_type || 'Door2Door'}</span>
-          </td>
-          <td>
-            <select class="status-select" onchange="updateOrderStatus(${o.id}, this.value)">
-              <option value="received" ${o.status === 'received' ? 'selected' : ''}>Received</option>
-              <option value="packed" ${o.status === 'packed' ? 'selected' : ''}>Packed (Fires API)</option>
-              <option value="processing" ${o.status === 'processing' ? 'selected' : ''}>Processing</option>
-              <option value="hold" ${o.status === 'hold' ? 'selected' : ''}>Hold</option>
-              <option value="problem" ${o.status === 'problem' ? 'selected' : ''}>Problematic</option>
-              <option value="delivered" ${o.status === 'delivered' ? 'selected' : ''}>Delivered</option>
-            </select>
-            <span class="cust-sub" style="margin-top:4px;">${trackingText}</span>
-          </td>
-          <td>
-            <button class="btn-action" style="color:#dc2626; padding: 4px 8px; font-size:11px;" onclick="deleteOrder(${o.id})">Delete</button>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    document.getElementById('orderForm').onsubmit = async (e) => {
-      e.preventDefault();
-      
-      const items = [];
-      document.querySelectorAll('.product-row').forEach(row => {
-        const product_name = row.querySelector('.prod-select').value;
-        const qty = row.querySelector('.prod-qty').value;
-        if (product_name) items.push({ product_name, qty });
-      });
-
-      const payload = {
-        customer_name: document.getElementById('name').value,
-        phone_number: document.getElementById('phone').value,
-        phone2: document.getElementById('phone2').value,
-        shipping_address: document.getElementById('address').value,
-        items: items,
-        cod_amount: document.getElementById('codAmount').value,
-        to_branch: document.getElementById('toBranch').value,
-        delivery_type: document.getElementById('deliveryType').value,
-        instruction: document.getElementById('instruction').value
-      };
-
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        alert(`Error creating order: ${data.error}`);
-        return;
-      }
-
-      closeOrderModal();
-      fetchOrders();
-      fetchInventory();
     };
-
-    async function updateOrderStatus(id, newStatus) {
-      const res = await fetch(`/api/orders/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
-      const data = await res.json();
-      if (!res.ok) alert(`API Error: ${JSON.stringify(data.details || data.error)}`);
-      fetchOrders();
-    }
-
-    async function syncNCM() {
-      try {
-        const res = await fetch('/api/orders/sync', { method: 'POST' });
-        const data = await res.json();
-        if(data.success) {
-          alert(`Sync complete. ${data.synced} orders updated.`);
-          fetchOrders();
-        }
-      } catch (err) { alert('Sync failed.'); }
-    }
-
-    async function deleteOrder(id) {
-      if (!confirm('Delete this order permanently?')) return;
-      await fetch(`/api/orders/${id}`, { method: 'DELETE' });
-      fetchOrders();
-    }
-
-    loadBranches();
-    fetchInventory();
-    fetchOrders();
   </script>
 </body>
 </html>
