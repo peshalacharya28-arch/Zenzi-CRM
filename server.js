@@ -18,6 +18,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// Database Migration Setup (Price removed from inventory)
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -34,24 +35,68 @@ pool.query(`
     tracking_id TEXT,
     vref_id TEXT
   );
-  ALTER TABLE orders ADD COLUMN IF NOT EXISTS phone2 TEXT;
-  ALTER TABLE orders ADD COLUMN IF NOT EXISTS instruction TEXT;
-  ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_type TEXT DEFAULT 'Door2Door';
-  ALTER TABLE orders ADD COLUMN IF NOT EXISTS package_name TEXT;
-  ALTER TABLE orders ADD COLUMN IF NOT EXISTS cod_amount TEXT;
-  ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_branch TEXT;
-  ALTER TABLE orders ADD COLUMN IF NOT EXISTS vref_id TEXT;
+
+  CREATE TABLE IF NOT EXISTS inventory (
+    id SERIAL PRIMARY KEY,
+    product_name TEXT UNIQUE NOT NULL,
+    stock_quantity INT DEFAULT 0,
+    sku TEXT
+  );
 `).catch(err => console.error('Database migration error:', err));
 
-// Route handlers
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+
+// --- INVENTORY API ENDPOINTS ---
+app.get('/api/inventory', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM inventory ORDER BY product_name ASC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch inventory' });
+  }
 });
 
-app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+app.post('/api/inventory', async (req, res) => {
+  const { product_name, stock_quantity, sku } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO inventory (product_name, stock_quantity, sku)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (product_name) 
+       DO UPDATE SET stock_quantity = EXCLUDED.stock_quantity, sku = EXCLUDED.sku
+       RETURNING *`,
+      [product_name, parseInt(stock_quantity) || 0, sku || '']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save inventory item' });
+  }
 });
 
+app.patch('/api/inventory/:id/stock', async (req, res) => {
+  const { adjustment } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE inventory SET stock_quantity = GREATEST(0, stock_quantity + $1) WHERE id = $2 RETURNING *',
+      [parseInt(adjustment), req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to adjust stock' });
+  }
+});
+
+app.delete('/api/inventory/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM inventory WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete inventory item' });
+  }
+});
+
+// --- ORDERS API ENDPOINTS ---
 app.get('/api/branches', async (req, res) => {
   try {
     const response = await axios.get('https://portal.nepalcanmove.com/api/v2/branches', {
@@ -77,23 +122,57 @@ app.get('/api/orders', async (req, res) => {
 app.post('/api/orders', async (req, res) => {
   const { 
     customer_name, phone_number, phone2, shipping_address, 
-    package_name, cod_amount, to_branch, instruction, delivery_type 
+    items, cod_amount, to_branch, instruction, delivery_type 
   } = req.body;
 
+  const client = await pool.connect();
+
   try {
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    let packageSummaryParts = [];
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        const { product_name, qty } = item;
+        const requestedQty = parseInt(qty) || 1;
+
+        const stockCheck = await client.query('SELECT stock_quantity FROM inventory WHERE product_name = $1', [product_name]);
+
+        if (stockCheck.rows.length > 0) {
+          const currentStock = stockCheck.rows[0].stock_quantity;
+          if (currentStock < requestedQty) {
+            throw new Error(`Insufficient stock for "${product_name}". Available: ${currentStock}, Requested: ${requestedQty}`);
+          }
+
+          await client.query(
+            'UPDATE inventory SET stock_quantity = stock_quantity - $1 WHERE product_name = $2',
+            [requestedQty, product_name]
+          );
+        }
+        packageSummaryParts.push(`${requestedQty}x ${product_name}`);
+      }
+    }
+
+    const finalPackageName = packageSummaryParts.length > 0 ? packageSummaryParts.join(', ') : 'Zenzi Item';
+
+    const result = await client.query(
       `INSERT INTO orders 
        (customer_name, phone_number, phone2, shipping_address, package_name, cod_amount, to_branch, instruction, delivery_type, status) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
       [
         customer_name, phone_number, phone2 || null, shipping_address, 
-        package_name || 'Zenzi Bag', cod_amount || '0', to_branch || 'KALANKI', 
+        finalPackageName, cod_amount || '0', to_branch || 'KALANKI', 
         instruction || null, delivery_type || 'Door2Door', 'received'
       ]
     );
-    res.json({ id: result.rows[0].id });
+
+    await client.query('COMMIT');
+    res.json({ id: result.rows[0].id, package_name: finalPackageName });
   } catch (err) {
-    res.status(500).json({ error: 'Database order creation failed' });
+    await client.query('ROLLBACK');
+    res.status(400).json({ error: err.message || 'Database order creation failed' });
+  } finally {
+    client.release();
   }
 });
 
@@ -135,7 +214,6 @@ app.patch('/api/orders/:id/status', async (req, res) => {
 
       if (ncmResponse.status === 200 || ncmResponse.status === 201) {
         const ncmOrderId = ncmResponse.data.orderid || ncmResponse.data.order_id || 'NCM-CREATED';
-
         await pool.query(
           "UPDATE orders SET tracking_id = $1, vref_id = $2, status = 'packed' WHERE id = $3",
           [String(ncmOrderId), vref, orderId]
@@ -168,11 +246,8 @@ app.post('/api/orders/sync', async (req, res) => {
         const statusText = JSON.stringify(response.data).toLowerCase();
         let newStatus = order.status;
 
-        if (statusText.includes('delivered')) {
-          newStatus = 'delivered';
-        } else if (statusText.includes('dispatched') || statusText.includes('transit')) {
-          newStatus = 'processing';
-        }
+        if (statusText.includes('delivered')) newStatus = 'delivered';
+        else if (statusText.includes('dispatched') || statusText.includes('transit')) newStatus = 'processing';
 
         if (newStatus !== order.status) {
           await pool.query("UPDATE orders SET status = $1 WHERE id = $2", [newStatus, order.id]);
@@ -187,9 +262,8 @@ app.post('/api/orders/sync', async (req, res) => {
 });
 
 app.delete('/api/orders/:id', async (req, res) => {
-  const orderId = req.params.id;
   try {
-    await pool.query('DELETE FROM orders WHERE id = $1', [orderId]);
+    await pool.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete order' });
