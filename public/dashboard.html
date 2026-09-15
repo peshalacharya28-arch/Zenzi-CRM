@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Zenzi Shop — Operations Portal</title>
   <link rel="icon" type="image/png" href="/favicon.png?v=2">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -48,10 +48,11 @@
 
     .btn-action {
       background: var(--card-bg); border: 1px solid var(--border-color);
-      padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 13px;
+      padding: 12px 16px; border-radius: 8px; font-weight: 600; font-size: 13px;
       cursor: pointer; color: var(--text-main); display: inline-flex;
       align-items: center; justify-content: center; gap: 6px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05); flex: 1; min-height: 42px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05); flex: 1; min-height: 46px;
+      touch-action: manipulation;
     }
     @media (min-width: 640px) { .btn-action { flex: initial; } }
     
@@ -88,19 +89,20 @@
     .table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-direction: column; }
     @media (min-width: 768px) { .table-toolbar { flex-direction: row; } }
 
-    .tabs { display: flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px; overflow-x: auto; width: 100%; }
+    .tabs { display: flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px; overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch; }
     @media (min-width: 768px) { .tabs { width: auto; } }
 
     .tab {
-      padding: 8px 12px; border: none; background: transparent; font-size: 12px; font-weight: 600;
+      padding: 10px 14px; border: none; background: transparent; font-size: 12px; font-weight: 600;
       color: var(--text-sub); cursor: pointer; border-radius: 6px; white-space: nowrap; flex: 1; text-align: center;
+      min-height: 40px;
     }
     .tab.active { background: #ffffff; color: var(--text-main); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 
-    .search-box { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; background: #fafafa; outline: none; }
+    .search-box { width: 100%; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; background: #fafafa; outline: none; }
     @media (min-width: 768px) { .search-box { width: 320px; } }
 
-    .table-wrapper { width: 100%; overflow-x: auto; }
+    .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { width: 100%; border-collapse: collapse; text-align: left; min-width: 600px; }
     th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-sub); padding: 12px 14px; border-bottom: 1px solid var(--border-color); }
     td { padding: 14px; border-bottom: 1px solid var(--border-color); font-size: 13px; vertical-align: middle; }
@@ -111,14 +113,14 @@
     .cust-sub { font-size: 12px; color: var(--text-sub); display: block; margin-top: 2px; }
 
     .status-select {
-      padding: 6px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+      padding: 8px 12px; border-radius: 20px; font-size: 11px; font-weight: 700;
       text-transform: uppercase; border: 1px solid var(--border-color);
-      background: var(--accent-badge); color: var(--text-main); cursor: pointer; outline: none; min-height: 36px;
+      background: var(--accent-badge); color: var(--text-main); cursor: pointer; outline: none; min-height: 40px;
     }
 
-    /* Modal Layout */
+    /* MOBILE MODAL FIXES */
     .modal-overlay {
-      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh;
       background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);
       display: flex; justify-content: center; align-items: flex-end; z-index: 1000;
       opacity: 0; pointer-events: none; transition: opacity 0.2s ease; padding: 0;
@@ -127,23 +129,24 @@
     .modal-overlay.active { opacity: 1; pointer-events: auto; }
     
     .modal-content {
-      background: #fff; padding: 24px; border-radius: 16px 16px 0 0; width: 100%;
+      background: #fff; padding: 20px; border-radius: 16px 16px 0 0; width: 100%;
       max-width: 650px; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); border: 1px solid var(--border-color);
-      max-height: 90vh; overflow-y: auto;
+      max-height: 85dvh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      margin-bottom: env(safe-area-inset-bottom);
     }
-    @media (min-width: 640px) { .modal-content { border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); } }
+    @media (min-width: 640px) { .modal-content { border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-height: 90vh; } }
     
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-sub); padding: 4px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; position: sticky; top: 0; background: #fff; z-index: 10; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); }
+    .close-btn { background: none; border: none; font-size: 28px; cursor: pointer; color: var(--text-sub); padding: 6px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
 
-    .product-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-    .product-row select { flex: 2; }
-    .product-row input[type="number"] { flex: 1; }
-    .btn-remove-row { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+    .product-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
+    .product-row select { flex: 2; min-width: 140px; }
+    .product-row input[type="number"] { flex: 1; min-width: 70px; }
+    .btn-remove-row { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 6px; padding: 10px 14px; cursor: pointer; min-height: 44px; font-weight: 700; }
 
     form { display: grid; grid-template-columns: 1fr; gap: 12px; }
     @media (min-width: 640px) { form { grid-template-columns: repeat(2, 1fr); } }
-    form input, form select { padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; outline: none; width: 100%; }
+    form input, form select { padding: 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 15px; outline: none; width: 100%; min-height: 48px; }
     .full-width { grid-column: 1 / -1; }
 
     .badge-stock { padding: 4px 8px; border-radius: 12px; font-weight: 700; font-size: 11px; }
@@ -242,8 +245,8 @@
   </div>
 
   <!-- ORDER ENTRY MODAL -->
-  <div class="modal-overlay" id="orderModal">
-    <div class="modal-content">
+  <div class="modal-overlay" id="orderModal" onclick="closeOnBackdropClick(event, 'orderModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 style="margin: 0; font-size: 18px;">Create New Order</h3>
         <button class="close-btn" onclick="closeOrderModal()">&times;</button>
@@ -256,7 +259,7 @@
         <div class="full-width" style="border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; background: #fafafa;">
           <label style="font-size: 12px; font-weight: 700; color: var(--text-sub); display: block; margin-bottom: 8px;">PRODUCTS IN ORDER</label>
           <div id="productRowsContainer"></div>
-          <button type="button" class="btn-action" style="font-size: 12px; padding: 6px 12px; margin-top: 4px;" onclick="addProductRow()">+ Add Another Item</button>
+          <button type="button" class="btn-action" style="font-size: 12px; padding: 8px 12px; margin-top: 4px;" onclick="addProductRow()">+ Add Another Item</button>
         </div>
 
         <input type="number" id="codAmount" placeholder="Custom COD Amount (NPR) *" required>
@@ -273,9 +276,9 @@
     </div>
   </div>
 
-  <!-- INVENTORY MODAL WITH SEARCH -->
-  <div class="modal-overlay" id="inventoryModal">
-    <div class="modal-content" style="max-width: 800px;">
+  <!-- INVENTORY MODAL -->
+  <div class="modal-overlay" id="inventoryModal" onclick="closeOnBackdropClick(event, 'inventoryModal')">
+    <div class="modal-content" style="max-width: 800px;" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 style="margin: 0; font-size: 18px;">Stock Inventory Management</h3>
         <button class="close-btn" onclick="closeInventoryModal()">&times;</button>
@@ -285,7 +288,7 @@
         <input type="text" id="invProductName" placeholder="Product Name *" required>
         <input type="text" id="invSKU" placeholder="SKU Code (Optional)">
         <input type="number" id="invStock" placeholder="Stock Quantity *" required min="0">
-        <button type="submit" class="btn-action btn-primary full-width" style="padding: 8px;">Add / Update Product</button>
+        <button type="submit" class="btn-action btn-primary full-width" style="padding: 10px;">Add / Update Product</button>
       </form>
 
       <div style="margin-bottom: 12px;">
@@ -312,9 +315,9 @@
     </div>
   </div>
 
-  <!-- GROWTH ANALYTICS MODAL -->
-  <div class="modal-overlay" id="analyticsModal">
-    <div class="modal-content" style="max-width: 750px;">
+  <!-- ANALYTICS MODAL -->
+  <div class="modal-overlay" id="analyticsModal" onclick="closeOnBackdropClick(event, 'analyticsModal')">
+    <div class="modal-content" style="max-width: 750px;" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 style="margin: 0; font-size: 18px;">Growth & Operations Analytics</h3>
         <button class="close-btn" onclick="closeAnalyticsModal()">&times;</button>
@@ -375,7 +378,6 @@
 
     let currentAccessToken = "";
 
-    // Helper: Authenticated API Fetch Wrapper
     async function authFetch(url, options = {}) {
       if (!currentAccessToken) {
         const sessionRes = await dbClient.auth.getSession();
@@ -425,6 +427,12 @@
       }
     });
 
+    function closeOnBackdropClick(event, modalId) {
+      if (event.target.id === modalId) {
+        document.getElementById(modalId).classList.remove('active');
+      }
+    }
+
     function openOrderModal() {
       document.getElementById('productRowsContainer').innerHTML = '';
       addProductRow();
@@ -451,7 +459,6 @@
       document.getElementById('analyticsModal').classList.remove('active');
     }
 
-    // Session Verification
     dbClient.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         window.location.href = '/index.html';
@@ -472,7 +479,6 @@
       }
     }
 
-    // INVENTORY MANAGEMENT & SEARCH LOGIC
     async function fetchInventory() {
       try {
         const res = await authFetch('/api/inventory');
@@ -509,11 +515,11 @@
             </span>
           </td>
           <td>
-            <button class="btn-action" style="padding:2px 6px; min-height:unset;" onclick="adjustStock(${item.id}, 1)">+1</button>
-            <button class="btn-action" style="padding:2px 6px; min-height:unset;" onclick="adjustStock(${item.id}, -1)">-1</button>
+            <button class="btn-action" style="padding:4px 10px; min-height:36px;" onclick="adjustStock(${item.id}, 1)">+1</button>
+            <button class="btn-action" style="padding:4px 10px; min-height:36px;" onclick="adjustStock(${item.id}, -1)">-1</button>
           </td>
           <td>
-            <button class="btn-action" style="color:#dc2626; padding:2px 6px; min-height:unset;" onclick="deleteInventoryItem(${item.id})">Del</button>
+            <button class="btn-action" style="color:#dc2626; padding:4px 10px; min-height:36px;" onclick="deleteInventoryItem(${item.id})">Del</button>
           </td>
         `;
         tbody.appendChild(tr);
@@ -548,7 +554,6 @@
       await fetchInventory();
     }
 
-    // GROWTH ANALYTICS LOGIC
     async function fetchAnalytics() {
       try {
         const res = await authFetch('/api/analytics');
@@ -576,7 +581,6 @@
       } catch (err) {}
     }
 
-    // MULTI-PRODUCT BUILDER LOGIC
     function addProductRow() {
       const container = document.getElementById('productRowsContainer');
       const row = document.createElement('div');
@@ -597,7 +601,6 @@
       container.appendChild(row);
     }
 
-    // ORDERS LOGIC
     async function loadBranches() {
       try {
         const res = await authFetch('/api/branches');
@@ -685,7 +688,7 @@
             <span class="cust-sub" style="margin-top:4px;">${trackingText}</span>
           </td>
           <td>
-            <button class="btn-action" style="color:#dc2626; padding: 4px 8px; font-size:11px;" onclick="deleteOrder(${o.id})">Delete</button>
+            <button class="btn-action" style="color:#dc2626; padding: 6px 10px; font-size:11px; min-height:36px;" onclick="deleteOrder(${o.id})">Delete</button>
           </td>
         `;
         tbody.appendChild(tr);
@@ -751,10 +754,12 @@
       } catch (err) { alert('Sync failed.'); }
     }
 
+    // UPDATED: FETCH INVENTORY AGAIN AFTER DELETION TO REFLECT RESTORED STOCK
     async function deleteOrder(id) {
-      if (!confirm('Delete this order permanently?')) return;
+      if (!confirm('Delete this order permanently and restore item stock?')) return;
       await authFetch(`/api/orders/${id}`, { method: 'DELETE' });
-      fetchOrders();
+      await fetchOrders();
+      await fetchInventory();
     }
   </script>
 </body>

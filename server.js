@@ -11,12 +11,12 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// 1. HTTP Security Headers
+// HTTP Security Headers
 app.use(helmet({
-  contentSecurityPolicy: false // Allows external Supabase CDN & Google Fonts scripts
+  contentSecurityPolicy: false
 }));
 
-// 2. API Rate Limiting (100 requests per 15 minutes per IP)
+// API Rate Limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -26,7 +26,8 @@ app.use('/api/', apiLimiter);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const NCM_TOKEN = process.env.NCM_TOKEN || '6543202e39d2b90776037483b546f2fb2d3d93c4';
+// UPDATED NEW NCM TOKEN
+const NCM_TOKEN = process.env.NCM_TOKEN || '6f33ba16bc5faf0902cc53ed920e78b75906b555';
 const NCM_FROM_BRANCH = 'KALANKI';
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://pnecdxsqaevyvsnibdcu.supabase.co";
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
@@ -38,7 +39,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// 3. Database Migration & RLS Lock Down
+// Database Setup
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -64,11 +65,9 @@ pool.query(`
     sku TEXT
   );
 
-  -- ENABLE ROW LEVEL SECURITY
   ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
   ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
 
-  -- DENY PUBLIC ANON ACCESS BY DEFAULT
   DO $$ 
   BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Deny Public Orders') THEN
@@ -80,7 +79,7 @@ pool.query(`
   END $$;
 `).catch(err => console.error('Database security initialization error:', err));
 
-// 4. JWT Authentication Middleware
+// JWT Middleware
 const verifyAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -101,7 +100,7 @@ const verifyAuth = async (req, res, next) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 
-// --- INVENTORY API ENDPOINTS (PROTECTED) ---
+// --- INVENTORY API ENDPOINTS ---
 app.get('/api/inventory', verifyAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM inventory ORDER BY product_name ASC');
@@ -150,7 +149,7 @@ app.delete('/api/inventory/:id', verifyAuth, async (req, res) => {
   }
 });
 
-// --- ANALYTICAL & GROWTH METRICS API (PROTECTED) ---
+// --- ANALYTICAL METRICS ---
 app.get('/api/analytics', verifyAuth, async (req, res) => {
   try {
     const totalOrdersRes = await pool.query('SELECT COUNT(*) FROM orders');
@@ -180,7 +179,7 @@ app.get('/api/analytics', verifyAuth, async (req, res) => {
   }
 });
 
-// --- ORDERS API ENDPOINTS (PROTECTED) ---
+// --- ORDERS API ENDPOINTS ---
 app.get('/api/branches', verifyAuth, async (req, res) => {
   try {
     const response = await axios.get('https://portal.nepalcanmove.com/api/v2/branches', {
@@ -345,12 +344,44 @@ app.post('/api/orders/sync', verifyAuth, async (req, res) => {
   }
 });
 
+// FIXED: DELETE ORDER AND RESTORE STOCK AUTOMATICALLY
 app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
+  const client = await pool.connect();
   try {
-    await pool.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
+    await client.query('BEGIN');
+
+    // 1. Fetch order details before deleting
+    const orderRes = await client.query('SELECT package_name FROM orders WHERE id = $1', [req.params.id]);
+    if (orderRes.rows.length > 0) {
+      const packageName = orderRes.rows[0].package_name || '';
+      
+      // Parse package string (e.g., "2x Tote Bag, 1x Canvas Pouch")
+      const items = packageName.split(',').map(item => item.trim());
+      for (const itemStr of items) {
+        const match = itemStr.match(/^(\d+)x\s+(.+)$/);
+        if (match) {
+          const qtyToRestore = parseInt(match[1]) || 1;
+          const productName = match[2].trim();
+
+          // Restore stock quantity
+          await client.query(
+            'UPDATE inventory SET stock_quantity = stock_quantity + $1 WHERE product_name = $2',
+            [qtyToRestore, productName]
+          );
+        }
+      }
+    }
+
+    // 2. Delete the order
+    await client.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
+
+    await client.query('COMMIT');
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete order' });
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Failed to delete order and restore stock' });
+  } finally {
+    client.release();
   }
 });
 
