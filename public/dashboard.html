@@ -15,6 +15,8 @@
       --border-color: #e2e8f0;
       --primary-blue: #0284c7;
       --accent-badge: #f1f5f9;
+      --ncm-dark: #1e293b;
+      --ncm-pink: #e11d48;
     }
 
     * { box-sizing: border-box; }
@@ -60,7 +62,21 @@
     .btn-primary { background: #0f172a; color: #fff; border: none; }
     .btn-primary:hover { background: #1e293b; }
 
-    /* Summary Metrics */
+    .btn-view-icon {
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+      color: var(--ncm-pink);
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+    }
+    .btn-view-icon:hover { background: #ffe4e6; }
+
     .metrics-grid {
       display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px;
     }
@@ -80,7 +96,6 @@
       display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
     }
 
-    /* Table Component */
     .table-card {
       background: var(--card-bg); border: 1px solid var(--border-color);
       border-radius: 12px; padding: clamp(14px, 2vw, 20px); box-shadow: 0 1px 3px rgba(0,0,0,0.02);
@@ -118,7 +133,6 @@
       background: var(--accent-badge); color: var(--text-main); cursor: pointer; outline: none; min-height: 40px;
     }
 
-    /* MOBILE MODAL FIXES */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh;
       background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);
@@ -152,6 +166,30 @@
     .badge-stock { padding: 4px 8px; border-radius: 12px; font-weight: 700; font-size: 11px; }
     .stock-ok { background: #dcfce7; color: #15803d; }
     .stock-low { background: #fee2e2; color: #b91c1c; }
+
+    /* NCM DETAIL WINDOW STYLES */
+    .ncm-header-banner {
+      background: #0f172a; color: #fff; padding: 16px 20px; border-radius: 8px;
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+    }
+    .ncm-badge { background: #16a34a; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .ncm-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 768px) { .ncm-grid { grid-template-columns: repeat(3, 1fr); } }
+
+    .ncm-card {
+      background: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 16px;
+    }
+    .ncm-card-title {
+      font-size: 12px; font-weight: 700; text-transform: uppercase; color: #e11d48;
+      letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .ncm-data-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #f1f5f9; font-size: 12px; }
+    .ncm-data-label { color: var(--text-sub); font-weight: 500; }
+    .ncm-data-value { font-weight: 700; color: var(--text-main); text-align: right; }
+
+    .comment-item { background: #f8fafc; border: 1px solid var(--border-color); padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 12px; }
+    .comment-meta { font-size: 10px; color: var(--text-sub); display: flex; justify-content: space-between; margin-bottom: 4px; }
   </style>
 </head>
 <body>
@@ -365,6 +403,81 @@
     </div>
   </div>
 
+  <!-- NCM-STYLE DETAIL MODAL WITH COMMENTS -->
+  <div class="modal-overlay" id="detailModal" onclick="closeOnBackdropClick(event, 'detailModal')">
+    <div class="modal-content" style="max-width: 1100px; padding: 24px;" onclick="event.stopPropagation()">
+      <div class="modal-header" style="border: none; padding-bottom: 0;">
+        <h3 style="margin:0; font-size:16px; color: var(--text-sub);">ORDER DISPATCH VIEW</h3>
+        <button class="close-btn" onclick="closeDetailModal()">&times;</button>
+      </div>
+
+      <div class="ncm-header-banner">
+        <div>
+          <span style="font-size: 22px; font-weight: 800; margin-right: 10px;" id="detail-order-id">#000000</span>
+          <span class="ncm-badge" id="detail-status-badge">ACTIVE</span>
+          <div style="font-size: 12px; margin-top: 6px; opacity: 0.8;" id="detail-route-time">KALANKI → NEWROAD</div>
+        </div>
+        <div>
+          <button class="btn-action btn-primary" style="font-size: 12px; padding: 6px 12px; min-height: unset;" onclick="closeDetailModal()">Back to Directory</button>
+        </div>
+      </div>
+
+      <div class="ncm-grid">
+        <!-- Col 1: Order Details & Status Timeline -->
+        <div>
+          <div class="ncm-card">
+            <div class="ncm-card-title">🚨 Order Details</div>
+            <div class="ncm-data-row"><span class="ncm-data-label">Tracking ID</span><span class="ncm-data-value" id="detail-tracking-id" style="color:var(--ncm-pink);">-</span></div>
+            <div class="ncm-data-row"><span class="ncm-data-label">COD Charge</span><span class="ncm-data-value" id="detail-cod">Rs. 0</span></div>
+            <div class="ncm-data-row"><span class="ncm-data-label">Receiver</span><span class="ncm-data-value" id="detail-receiver" style="color:#0284c7;">-</span></div>
+            <div class="ncm-data-row"><span class="ncm-data-label">Phone</span><span class="ncm-data-value" id="detail-phone">-</span></div>
+            <div class="ncm-data-row"><span class="ncm-data-label">Address</span><span class="ncm-data-value" id="detail-address">-</span></div>
+            <div class="ncm-data-row"><span class="ncm-data-label">Delivery Type</span><span class="ncm-data-value" id="detail-delivery-type">Door2Door</span></div>
+          </div>
+
+          <div class="ncm-card">
+            <div class="ncm-card-title">📌 Order Status</div>
+            <div style="font-size: 13px; font-weight: 700; color: #16a34a;" id="detail-timeline-status">Received</div>
+            <div style="font-size: 11px; color: var(--text-sub);" id="detail-timeline-date">-</div>
+          </div>
+        </div>
+
+        <!-- Col 2: Package Description & Comments -->
+        <div>
+          <div class="ncm-card">
+            <div class="ncm-card-title">📦 Package Description</div>
+            <div class="ncm-data-row"><span class="ncm-data-label">Items</span><span class="ncm-data-value" id="detail-items">-</span></div>
+            <div class="ncm-data-row"><span class="ncm-data-label">Instruction</span><span class="ncm-data-value" id="detail-instruction">None</span></div>
+          </div>
+
+          <div class="ncm-card">
+            <div class="ncm-card-title">
+              <span>💬 Comments</span>
+              <button class="btn-action" style="font-size: 11px; padding: 2px 8px; min-height: unset;" onclick="toggleCommentInput()">+ Add</button>
+            </div>
+
+            <div id="comment-input-box" style="display: none; margin-bottom: 12px;">
+              <textarea id="newCommentText" style="width: 100%; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-size: 12px; outline: none;" rows="2" placeholder="Write internal team note..."></textarea>
+              <button class="btn-action btn-primary" style="font-size: 11px; padding: 6px 12px; margin-top: 4px; width: 100%;" onclick="submitComment()">Post Note</button>
+            </div>
+
+            <div id="commentsContainer" style="max-height: 200px; overflow-y: auto;"></div>
+          </div>
+        </div>
+
+        <!-- Col 3: Reference Logs -->
+        <div>
+          <div class="ncm-card">
+            <div class="ncm-card-title">🏷️ Reference & Tags</div>
+            <div class="ncm-data-row"><span class="ncm-data-label">VREF ID</span><span class="ncm-data-value" id="detail-vref">-</span></div>
+            <div class="ncm-data-row"><span class="ncm-data-label">Origin Branch</span><span class="ncm-data-value">KALANKI</span></div>
+            <div class="ncm-data-row"><span class="ncm-data-label">Destination Branch</span><span class="ncm-data-value" id="detail-to-branch">KALANKI</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
@@ -377,6 +490,7 @@
     });
 
     let currentAccessToken = "";
+    let activeOrderDetailId = null;
 
     async function authFetch(url, options = {}) {
       if (!currentAccessToken) {
@@ -398,7 +512,7 @@
       return res;
     }
 
-    // 20-MINUTE INACTIVITY TIMER
+    // INACTIVITY TIMER
     let inactivityTimer;
     const INACTIVITY_LIMIT = 20 * 60 * 1000;
 
@@ -424,6 +538,7 @@
         closeOrderModal();
         closeInventoryModal();
         closeAnalyticsModal();
+        closeDetailModal();
       }
     });
 
@@ -457,6 +572,88 @@
     }
     function closeAnalyticsModal() {
       document.getElementById('analyticsModal').classList.remove('active');
+    }
+
+    // NCM DETAIL WINDOW LOGIC
+    async function openDetailModal(orderId) {
+      activeOrderDetailId = orderId;
+      const res = await authFetch(`/api/orders/${orderId}`);
+      const order = await res.json();
+
+      document.getElementById('detail-order-id').innerText = `#${order.tracking_id || order.vref_id || order.id}`;
+      document.getElementById('detail-status-badge').innerText = (order.status || 'ACTIVE').toUpperCase();
+      document.getElementById('detail-route-time').innerText = `KALANKI → ${order.to_branch || 'KALANKI'}`;
+      
+      document.getElementById('detail-tracking-id').innerText = order.tracking_id || 'Not Dispatched';
+      document.getElementById('detail-cod').innerText = `Rs. ${order.cod_amount || 0}`;
+      document.getElementById('detail-receiver').innerText = order.customer_name;
+      document.getElementById('detail-phone').innerText = order.phone2 ? `${order.phone_number} / ${order.phone2}` : order.phone_number;
+      document.getElementById('detail-address').innerText = order.shipping_address;
+      document.getElementById('detail-delivery-type').innerText = order.delivery_type || 'Door2Door';
+
+      document.getElementById('detail-timeline-status').innerText = (order.status || 'Received').toUpperCase();
+      document.getElementById('detail-timeline-date').innerText = order.created_at ? new Date(order.created_at).toLocaleString() : '-';
+
+      document.getElementById('detail-items').innerText = order.package_name || '-';
+      document.getElementById('detail-instruction').innerText = order.instruction || 'None';
+
+      document.getElementById('detail-vref').innerText = order.vref_id || '-';
+      document.getElementById('detail-to-branch').innerText = order.to_branch || 'KALANKI';
+
+      renderComments(order.comments || []);
+      document.getElementById('detailModal').classList.add('active');
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detailModal').classList.remove('active');
+      document.getElementById('comment-input-box').style.display = 'none';
+      activeOrderDetailId = null;
+    }
+
+    function toggleCommentInput() {
+      const box = document.getElementById('comment-input-box');
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function renderComments(comments) {
+      const container = document.getElementById('commentsContainer');
+      container.innerHTML = '';
+
+      if (!comments || comments.length === 0) {
+        container.innerHTML = `<div style="text-align:center; color: var(--text-sub); font-size:12px; padding:12px;">No comments yet.</div>`;
+        return;
+      }
+
+      comments.forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'comment-item';
+        div.innerHTML = `
+          <div class="comment-meta">
+            <strong>${c.author}</strong>
+            <span>${new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+          <div>${c.text}</div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function submitComment() {
+      const text = document.getElementById('newCommentText').value.trim();
+      if (!text || !activeOrderDetailId) return;
+
+      const res = await authFetch(`/api/orders/${activeOrderDetailId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ text })
+      });
+
+      if (res.ok) {
+        document.getElementById('newCommentText').value = '';
+        toggleCommentInput();
+        const updatedOrder = await res.json();
+        renderComments(updatedOrder.comments || []);
+        fetchOrders();
+      }
     }
 
     dbClient.auth.getSession().then(({ data: { session } }) => {
@@ -688,7 +885,10 @@
             <span class="cust-sub" style="margin-top:4px;">${trackingText}</span>
           </td>
           <td>
-            <button class="btn-action" style="color:#dc2626; padding: 6px 10px; font-size:11px; min-height:36px;" onclick="deleteOrder(${o.id})">Delete</button>
+            <div style="display:flex; gap:6px;">
+              <button class="btn-view-icon" onclick="openDetailModal(${o.id})" title="View NCM Details & Comments">👁️</button>
+              <button class="btn-action" style="color:#dc2626; padding: 6px 10px; font-size:11px; min-height:36px;" onclick="deleteOrder(${o.id})">Delete</button>
+            </div>
           </td>
         `;
         tbody.appendChild(tr);
@@ -754,7 +954,6 @@
       } catch (err) { alert('Sync failed.'); }
     }
 
-    // UPDATED: FETCH INVENTORY AGAIN AFTER DELETION TO REFLECT RESTORED STOCK
     async function deleteOrder(id) {
       if (!confirm('Delete this order permanently and restore item stock?')) return;
       await authFetch(`/api/orders/${id}`, { method: 'DELETE' });

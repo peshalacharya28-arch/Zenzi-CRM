@@ -12,11 +12,9 @@ app.use(express.json());
 app.use(cors());
 
 // HTTP Security Headers
-app.use(helmet({
-  contentSecurityPolicy: false
-}));
+app.use(helmet({ contentSecurityPolicy: false }));
 
-// API Rate Limiting
+// Rate Limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -26,7 +24,6 @@ app.use('/api/', apiLimiter);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// UPDATED NEW NCM TOKEN
 const NCM_TOKEN = process.env.NCM_TOKEN || '6f33ba16bc5faf0902cc53ed920e78b75906b555';
 const NCM_FROM_BRANCH = 'KALANKI';
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://pnecdxsqaevyvsnibdcu.supabase.co";
@@ -39,7 +36,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Database Setup
+// Database Migrations (Adding JSONB Comments Column)
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -55,8 +52,11 @@ pool.query(`
     status TEXT DEFAULT 'received',
     tracking_id TEXT,
     vref_id TEXT,
+    comments JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
+
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS comments JSONB DEFAULT '[]'::jsonb;
 
   CREATE TABLE IF NOT EXISTS inventory (
     id SERIAL PRIMARY KEY,
@@ -100,7 +100,7 @@ const verifyAuth = async (req, res, next) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 
-// --- INVENTORY API ENDPOINTS ---
+// --- INVENTORY API ---
 app.get('/api/inventory', verifyAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM inventory ORDER BY product_name ASC');
@@ -179,7 +179,7 @@ app.get('/api/analytics', verifyAuth, async (req, res) => {
   }
 });
 
-// --- ORDERS API ENDPOINTS ---
+// --- ORDERS & COMMENTS API ---
 app.get('/api/branches', verifyAuth, async (req, res) => {
   try {
     const response = await axios.get('https://portal.nepalcanmove.com/api/v2/branches', {
@@ -199,6 +199,42 @@ app.get('/api/orders', verifyAuth, async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to retrieve orders' });
+  }
+});
+
+app.get('/api/orders/:id', verifyAuth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch order details' });
+  }
+});
+
+// ADD COMMENT TO ORDER
+app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
+  const { text } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ error: 'Comment text is required' });
+
+  try {
+    const commentObj = {
+      id: Date.now(),
+      text: text.trim(),
+      author: req.user.email || 'Admin User',
+      timestamp: new Date().toISOString()
+    };
+
+    const result = await pool.query(
+      `UPDATE orders 
+       SET comments = COALESCE(comments, '[]'::jsonb) || $1::jsonb 
+       WHERE id = $2 RETURNING *`,
+      [JSON.stringify([commentObj]), req.params.id]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to add comment' });
   }
 });
 
@@ -240,8 +276,8 @@ app.post('/api/orders', verifyAuth, async (req, res) => {
 
     const result = await client.query(
       `INSERT INTO orders 
-       (customer_name, phone_number, phone2, shipping_address, package_name, cod_amount, to_branch, instruction, delivery_type, status) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+       (customer_name, phone_number, phone2, shipping_address, package_name, cod_amount, to_branch, instruction, delivery_type, status, comments) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, '[]'::jsonb) RETURNING id`,
       [
         customer_name, phone_number, phone2 || null, shipping_address, 
         finalPackageName, cod_amount || '0', to_branch || 'KALANKI', 
@@ -344,18 +380,14 @@ app.post('/api/orders/sync', verifyAuth, async (req, res) => {
   }
 });
 
-// FIXED: DELETE ORDER AND RESTORE STOCK AUTOMATICALLY
 app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // 1. Fetch order details before deleting
     const orderRes = await client.query('SELECT package_name FROM orders WHERE id = $1', [req.params.id]);
     if (orderRes.rows.length > 0) {
       const packageName = orderRes.rows[0].package_name || '';
-      
-      // Parse package string (e.g., "2x Tote Bag, 1x Canvas Pouch")
       const items = packageName.split(',').map(item => item.trim());
       for (const itemStr of items) {
         const match = itemStr.match(/^(\d+)x\s+(.+)$/);
@@ -363,7 +395,6 @@ app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
           const qtyToRestore = parseInt(match[1]) || 1;
           const productName = match[2].trim();
 
-          // Restore stock quantity
           await client.query(
             'UPDATE inventory SET stock_quantity = stock_quantity + $1 WHERE product_name = $2',
             [qtyToRestore, productName]
@@ -372,9 +403,7 @@ app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
       }
     }
 
-    // 2. Delete the order
     await client.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
-
     await client.query('COMMIT');
     res.json({ success: true });
   } catch (error) {
