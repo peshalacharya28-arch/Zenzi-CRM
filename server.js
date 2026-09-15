@@ -17,7 +17,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 // Rate Limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 150,
   message: { error: 'Too many requests from this IP. Please wait a few minutes.' }
 });
 app.use('/api/', apiLimiter);
@@ -36,7 +36,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Database Migrations (Adding JSONB Comments Column)
+// Database Migration Setup
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -179,7 +179,7 @@ app.get('/api/analytics', verifyAuth, async (req, res) => {
   }
 });
 
-// --- ORDERS & COMMENTS API ---
+// --- ORDERS API ---
 app.get('/api/branches', verifyAuth, async (req, res) => {
   try {
     const response = await axios.get('https://portal.nepalcanmove.com/api/v2/branches', {
@@ -206,24 +206,57 @@ app.get('/api/orders/:id', verifyAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
-    res.json(result.rows[0]);
+    
+    const order = result.rows[0];
+
+    // LIVE SYNC WITH NCM FOR SPECIFIC ORDER
+    if (order.tracking_id) {
+      try {
+        const ncmRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/status?id=${order.tracking_id}`, {
+          headers: { 'Authorization': `Token ${NCM_TOKEN}` },
+          timeout: 4000
+        });
+        if (ncmRes.data && ncmRes.data.comments) {
+          order.ncm_comments = ncmRes.data.comments;
+        }
+      } catch (err) {}
+    }
+
+    res.json(order);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch order details' });
   }
 });
 
-// ADD COMMENT TO ORDER
+// ADD COMMENT TO SPECIFIC ORDER (SYNCED TO NCM IF TRACKING EXISTS)
 app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
   const { text } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'Comment text is required' });
 
   try {
+    const orderRes = await pool.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+    const order = orderRes.rows[0];
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
     const commentObj = {
       id: Date.now(),
       text: text.trim(),
       author: req.user.email || 'Admin User',
       timestamp: new Date().toISOString()
     };
+
+    // If order has tracking ID, attempt pushing comment to NCM portal
+    if (order.tracking_id) {
+      try {
+        await axios.post('https://portal.nepalcanmove.com/api/v1/order/comment', {
+          orderid: order.tracking_id,
+          comment: text.trim()
+        }, {
+          headers: { 'Authorization': `Token ${NCM_TOKEN}`, 'Content-Type': 'application/json' },
+          timeout: 5000
+        });
+      } catch (err) {}
+    }
 
     const result = await pool.query(
       `UPDATE orders 
@@ -235,6 +268,92 @@ app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Failed to add comment' });
+  }
+});
+
+// EDIT ORDER (RESTRICTED TO 'received' STATUS ONLY)
+app.put('/api/orders/:id', verifyAuth, async (req, res) => {
+  const { 
+    customer_name, phone_number, phone2, shipping_address, 
+    items, cod_amount, to_branch, instruction, delivery_type 
+  } = req.body;
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1. Verify current order status
+    const currentOrderRes = await client.query('SELECT status, package_name FROM orders WHERE id = $1', [req.params.id]);
+    if (currentOrderRes.rows.length === 0) {
+      throw new Error('Order not found');
+    }
+
+    const currentOrder = currentOrderRes.rows[0];
+    if (currentOrder.status !== 'received') {
+      throw new Error('Order cannot be edited once it has passed "Received" status');
+    }
+
+    // 2. Restore previous stock items
+    if (currentOrder.package_name) {
+      const prevItems = currentOrder.package_name.split(',').map(i => i.trim());
+      for (const itemStr of prevItems) {
+        const match = itemStr.match(/^(\d+)x\s+(.+)$/);
+        if (match) {
+          await client.query(
+            'UPDATE inventory SET stock_quantity = stock_quantity + $1 WHERE product_name = $2',
+            [parseInt(match[1]) || 1, match[2].trim()]
+          );
+        }
+      }
+    }
+
+    // 3. Validate and deduct new items stock
+    let packageSummaryParts = [];
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        const { product_name, qty } = item;
+        const requestedQty = parseInt(qty) || 1;
+
+        const stockCheck = await client.query('SELECT stock_quantity FROM inventory WHERE product_name = $1', [product_name]);
+
+        if (stockCheck.rows.length > 0) {
+          const currentStock = stockCheck.rows[0].stock_quantity;
+          if (currentStock < requestedQty) {
+            throw new Error(`Insufficient stock for "${product_name}". Available: ${currentStock}, Requested: ${requestedQty}`);
+          }
+
+          await client.query(
+            'UPDATE inventory SET stock_quantity = stock_quantity - $1 WHERE product_name = $2',
+            [requestedQty, product_name]
+          );
+        }
+        packageSummaryParts.push(`${requestedQty}x ${product_name}`);
+      }
+    }
+
+    const finalPackageName = packageSummaryParts.length > 0 ? packageSummaryParts.join(', ') : 'Zenzi Item';
+
+    // 4. Update Order Record
+    await client.query(
+      `UPDATE orders 
+       SET customer_name = $1, phone_number = $2, phone2 = $3, shipping_address = $4, 
+           package_name = $5, cod_amount = $6, to_branch = $7, instruction = $8, delivery_type = $9
+       WHERE id = $10`,
+      [
+        customer_name, phone_number, phone2 || null, shipping_address, 
+        finalPackageName, cod_amount || '0', to_branch || 'KALANKI', 
+        instruction || null, delivery_type || 'Door2Door', req.params.id
+      ]
+    );
+
+    await client.query('COMMIT');
+    res.json({ success: true, package_name: finalPackageName });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(400).json({ error: err.message || 'Failed to edit order' });
+  } finally {
+    client.release();
   }
 });
 
@@ -350,6 +469,7 @@ app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
   }
 });
 
+// BACKGROUND AUTOMATIC SYNC ROUTINE
 app.post('/api/orders/sync', verifyAuth, async (req, res) => {
   try {
     const activeOrders = await pool.query("SELECT * FROM orders WHERE tracking_id IS NOT NULL AND status IN ('packed', 'processing')");
@@ -359,7 +479,7 @@ app.post('/api/orders/sync', verifyAuth, async (req, res) => {
       try {
         const response = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/status?id=${order.tracking_id}`, {
           headers: { 'Authorization': `Token ${NCM_TOKEN}` },
-          timeout: 5000
+          timeout: 4000
         });
 
         const statusText = JSON.stringify(response.data).toLowerCase();

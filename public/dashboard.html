@@ -15,7 +15,6 @@
       --border-color: #e2e8f0;
       --primary-blue: #0284c7;
       --accent-badge: #f1f5f9;
-      --ncm-dark: #1e293b;
       --ncm-pink: #e11d48;
     }
 
@@ -62,20 +61,19 @@
     .btn-primary { background: #0f172a; color: #fff; border: none; }
     .btn-primary:hover { background: #1e293b; }
 
-    .btn-view-icon {
-      background: #fff1f2;
-      border: 1px solid #fecdd3;
-      color: var(--ncm-pink);
+    .btn-icon {
+      border: 1px solid var(--border-color);
+      background: #ffffff;
       padding: 6px 10px;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       min-height: 36px;
     }
-    .btn-view-icon:hover { background: #ffe4e6; }
+    .btn-icon:hover { background: #f1f5f9; }
 
     .metrics-grid {
       display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px;
@@ -167,6 +165,21 @@
     .stock-ok { background: #dcfce7; color: #15803d; }
     .stock-low { background: #fee2e2; color: #b91c1c; }
 
+    /* TOAST NOTIFICATION CONTAINER */
+    #toast-container {
+      position: fixed; top: 20px; right: 20px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+    }
+    .toast {
+      background: #0f172a; color: #ffffff; padding: 12px 18px; border-radius: 8px;
+      font-size: 13px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      opacity: 0; transform: translateY(-10px); transition: all 0.25s ease; pointer-events: auto;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast-error { background: #dc2626; }
+    .toast-success { background: #15803d; }
+
     /* NCM DETAIL WINDOW STYLES */
     .ncm-header-banner {
       background: #0f172a; color: #fff; padding: 16px 20px; border-radius: 8px;
@@ -194,6 +207,9 @@
 </head>
 <body>
 
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container"></div>
+
   <div class="container">
     <div class="section-label">Operations Platform</div>
     <div class="header-row">
@@ -205,7 +221,6 @@
         <button class="btn-action btn-primary" onclick="openOrderModal()">+ Add Order</button>
         <button class="btn-action" onclick="openInventoryModal()">📦 Inventory & Stock</button>
         <button class="btn-action" onclick="openAnalyticsModal()">📊 Analytics</button>
-        <button class="btn-action" onclick="syncNCM()">Sync NCM</button>
         <button class="btn-action" onclick="logout()">Logout</button>
       </div>
     </div>
@@ -282,14 +297,15 @@
     </div>
   </div>
 
-  <!-- ORDER ENTRY MODAL -->
+  <!-- ORDER ENTRY / EDIT MODAL -->
   <div class="modal-overlay" id="orderModal" onclick="closeOnBackdropClick(event, 'orderModal')">
     <div class="modal-content" onclick="event.stopPropagation()">
       <div class="modal-header">
-        <h3 style="margin: 0; font-size: 18px;">Create New Order</h3>
+        <h3 style="margin: 0; font-size: 18px;" id="orderModalTitle">Create New Order</h3>
         <button class="close-btn" onclick="closeOrderModal()">&times;</button>
       </div>
       <form id="orderForm">
+        <input type="hidden" id="editingOrderId" value="">
         <input type="text" id="name" placeholder="Customer Name *" required>
         <input type="text" id="phone" placeholder="Primary Phone *" required>
         <input type="text" id="phone2" placeholder="Secondary Phone (Optional)">
@@ -309,7 +325,9 @@
         </select>
         <input type="text" id="address" class="full-width" placeholder="Full Delivery Address *" required>
         <input type="text" id="instruction" class="full-width" placeholder="Delivery Instructions (Optional)">
-        <button type="submit" class="btn-action btn-primary full-width" style="padding: 14px; margin-top: 6px;">Save Order & Deduct Stock</button>
+        <button type="submit" id="btnSubmitOrder" class="btn-action btn-primary full-width" style="padding: 14px; margin-top: 6px;">
+          <span>Save Order & Deduct Stock</span>
+        </button>
       </form>
     </div>
   </div>
@@ -326,7 +344,9 @@
         <input type="text" id="invProductName" placeholder="Product Name *" required>
         <input type="text" id="invSKU" placeholder="SKU Code (Optional)">
         <input type="number" id="invStock" placeholder="Stock Quantity *" required min="0">
-        <button type="submit" class="btn-action btn-primary full-width" style="padding: 10px;">Add / Update Product</button>
+        <button type="submit" id="btnSubmitInventory" class="btn-action btn-primary full-width" style="padding: 10px;">
+          <span>Add / Update Product</span>
+        </button>
       </form>
 
       <div style="margin-bottom: 12px;">
@@ -403,7 +423,7 @@
     </div>
   </div>
 
-  <!-- NCM-STYLE DETAIL MODAL WITH COMMENTS -->
+  <!-- NCM-STYLE DETAIL MODAL WITH LIVE COMMENTS -->
   <div class="modal-overlay" id="detailModal" onclick="closeOnBackdropClick(event, 'detailModal')">
     <div class="modal-content" style="max-width: 1100px; padding: 24px;" onclick="event.stopPropagation()">
       <div class="modal-header" style="border: none; padding-bottom: 0;">
@@ -423,7 +443,7 @@
       </div>
 
       <div class="ncm-grid">
-        <!-- Col 1: Order Details & Status Timeline -->
+        <!-- Col 1: Order Details -->
         <div>
           <div class="ncm-card">
             <div class="ncm-card-title">🚨 Order Details</div>
@@ -436,13 +456,13 @@
           </div>
 
           <div class="ncm-card">
-            <div class="ncm-card-title">📌 Order Status</div>
+            <div class="ncm-card-title">📌 Order Status Timeline</div>
             <div style="font-size: 13px; font-weight: 700; color: #16a34a;" id="detail-timeline-status">Received</div>
             <div style="font-size: 11px; color: var(--text-sub);" id="detail-timeline-date">-</div>
           </div>
         </div>
 
-        <!-- Col 2: Package Description & Comments -->
+        <!-- Col 2: Package & Comments -->
         <div>
           <div class="ncm-card">
             <div class="ncm-card-title">📦 Package Description</div>
@@ -452,16 +472,18 @@
 
           <div class="ncm-card">
             <div class="ncm-card-title">
-              <span>💬 Comments</span>
-              <button class="btn-action" style="font-size: 11px; padding: 2px 8px; min-height: unset;" onclick="toggleCommentInput()">+ Add</button>
+              <span>💬 Order Comments</span>
+              <button class="btn-action" style="font-size: 11px; padding: 2px 8px; min-height: unset;" onclick="toggleCommentInput()">+ Add Note</button>
             </div>
 
             <div id="comment-input-box" style="display: none; margin-bottom: 12px;">
-              <textarea id="newCommentText" style="width: 100%; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-size: 12px; outline: none;" rows="2" placeholder="Write internal team note..."></textarea>
-              <button class="btn-action btn-primary" style="font-size: 11px; padding: 6px 12px; margin-top: 4px; width: 100%;" onclick="submitComment()">Post Note</button>
+              <textarea id="newCommentText" style="width: 100%; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-size: 12px; outline: none;" rows="2" placeholder="Write internal or NCM rider note..."></textarea>
+              <button id="btnSubmitComment" class="btn-action btn-primary" style="font-size: 11px; padding: 6px 12px; margin-top: 4px; width: 100%;" onclick="submitComment()">
+                <span>Post Note</span>
+              </button>
             </div>
 
-            <div id="commentsContainer" style="max-height: 200px; overflow-y: auto;"></div>
+            <div id="commentsContainer" style="max-height: 220px; overflow-y: auto;"></div>
           </div>
         </div>
 
@@ -491,6 +513,22 @@
 
     let currentAccessToken = "";
     let activeOrderDetailId = null;
+    let autoSyncInterval = null;
+
+    // TOAST NOTIFICATION SYSTEM
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type === 'error' ? 'toast-error' : 'toast-success'}`;
+      toast.innerHTML = `<span>${type === 'error' ? '⚠️' : '✅'}</span> <span>${message}</span>`;
+      container.appendChild(toast);
+
+      setTimeout(() => toast.classList.add('show'), 10);
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
 
     async function authFetch(url, options = {}) {
       if (!currentAccessToken) {
@@ -506,7 +544,7 @@
 
       const res = await fetch(url, options);
       if (res.status === 401 || res.status === 403) {
-        alert("Security Session Expired. Please log in again.");
+        showToast("Session expired. Please log in again.", "error");
         logout();
       }
       return res;
@@ -519,7 +557,7 @@
     function resetInactivityTimer() {
       clearTimeout(inactivityTimer);
       inactivityTimer = setTimeout(async () => {
-        alert("Session expired due to 20 minutes of inactivity.");
+        showToast("Session expired due to 20 minutes of inactivity.", "error");
         await logout();
       }, INACTIVITY_LIMIT);
     }
@@ -548,14 +586,47 @@
       }
     }
 
-    function openOrderModal() {
+    function openOrderModal(editOrderId = null) {
       document.getElementById('productRowsContainer').innerHTML = '';
-      addProductRow();
+      document.getElementById('editingOrderId').value = editOrderId || '';
+      
+      if (editOrderId) {
+        document.getElementById('orderModalTitle').innerText = "Edit Order (#" + editOrderId + ")";
+        const order = allOrders.find(o => o.id === editOrderId);
+        if (order) {
+          document.getElementById('name').value = order.customer_name || '';
+          document.getElementById('phone').value = order.phone_number || '';
+          document.getElementById('phone2').value = order.phone2 || '';
+          document.getElementById('address').value = order.shipping_address || '';
+          document.getElementById('codAmount').value = order.cod_amount || '';
+          document.getElementById('toBranch').value = order.to_branch || '';
+          document.getElementById('deliveryType').value = order.delivery_type || 'Door2Door';
+          document.getElementById('instruction').value = order.instruction || '';
+
+          // Parse items into dynamic rows
+          if (order.package_name) {
+            const itemsStr = order.package_name.split(',');
+            itemsStr.forEach(str => {
+              const match = str.trim().match(/^(\d+)x\s+(.+)$/);
+              if (match) {
+                addProductRow(match[2].trim(), parseInt(match[1]) || 1);
+              }
+            });
+          }
+        }
+      } else {
+        document.getElementById('orderModalTitle').innerText = "Create New Order";
+        document.getElementById('orderForm').reset();
+        addProductRow();
+      }
+
       document.getElementById('orderModal').classList.add('active');
     }
+
     function closeOrderModal() {
       document.getElementById('orderModal').classList.remove('active');
       document.getElementById('orderForm').reset();
+      document.getElementById('editingOrderId').value = '';
     }
 
     function openInventoryModal() {
@@ -600,7 +671,20 @@
       document.getElementById('detail-vref').innerText = order.vref_id || '-';
       document.getElementById('detail-to-branch').innerText = order.to_branch || 'KALANKI';
 
-      renderComments(order.comments || []);
+      // Combine local CRM comments with NCM remote comments
+      let combinedComments = order.comments || [];
+      if (order.ncm_comments && Array.isArray(order.ncm_comments)) {
+        order.ncm_comments.forEach(ncmC => {
+          combinedComments.push({
+            id: ncmC.id || Date.now(),
+            author: 'NCM Agent / Rider',
+            text: ncmC.comment || ncmC.text || ncmC,
+            timestamp: ncmC.created_at || new Date().toISOString()
+          });
+        });
+      }
+
+      renderComments(combinedComments);
       document.getElementById('detailModal').classList.add('active');
     }
 
@@ -639,20 +723,30 @@
     }
 
     async function submitComment() {
+      const btn = document.getElementById('btnSubmitComment');
       const text = document.getElementById('newCommentText').value.trim();
       if (!text || !activeOrderDetailId) return;
+
+      btn.disabled = true;
+      btn.querySelector('span').innerText = "Posting...";
 
       const res = await authFetch(`/api/orders/${activeOrderDetailId}/comments`, {
         method: 'POST',
         body: JSON.stringify({ text })
       });
 
+      btn.disabled = false;
+      btn.querySelector('span').innerText = "Post Note";
+
       if (res.ok) {
+        showToast("Comment posted successfully!");
         document.getElementById('newCommentText').value = '';
         toggleCommentInput();
         const updatedOrder = await res.json();
         renderComments(updatedOrder.comments || []);
         fetchOrders();
+      } else {
+        showToast("Failed to post comment.", "error");
       }
     }
 
@@ -664,10 +758,17 @@
         loadBranches();
         fetchInventory();
         fetchOrders();
+
+        // START LIVE AUTOMATIC BACKGROUND POLLING (EVERY 30 SECONDS)
+        autoSyncInterval = setInterval(() => {
+          fetchOrders(true);
+          fetchInventory(true);
+        }, 30000);
       }
     }).catch(() => { window.location.href = '/index.html'; });
 
     async function logout() {
+      if (autoSyncInterval) clearInterval(autoSyncInterval);
       try { await dbClient.auth.signOut(); } catch (err) {}
       finally {
         sessionStorage.clear();
@@ -676,7 +777,7 @@
       }
     }
 
-    async function fetchInventory() {
+    async function fetchInventory(silent = false) {
       try {
         const res = await authFetch('/api/inventory');
         inventoryList = await res.json();
@@ -725,7 +826,11 @@
 
     document.getElementById('inventoryForm').onsubmit = async (e) => {
       e.preventDefault();
-      await authFetch('/api/inventory', {
+      const btn = document.getElementById('btnSubmitInventory');
+      btn.disabled = true;
+      btn.querySelector('span').innerText = "Saving...";
+
+      const res = await authFetch('/api/inventory', {
         method: 'POST',
         body: JSON.stringify({
           product_name: document.getElementById('invProductName').value.trim(),
@@ -733,8 +838,17 @@
           stock_quantity: document.getElementById('invStock').value
         })
       });
-      document.getElementById('inventoryForm').reset();
-      await fetchInventory();
+
+      btn.disabled = false;
+      btn.querySelector('span').innerText = "Add / Update Product";
+
+      if (res.ok) {
+        showToast("Inventory product updated!");
+        document.getElementById('inventoryForm').reset();
+        await fetchInventory();
+      } else {
+        showToast("Failed to update inventory.", "error");
+      }
     };
 
     async function adjustStock(id, adjustment) {
@@ -742,12 +856,14 @@
         method: 'PATCH',
         body: JSON.stringify({ adjustment })
       });
+      showToast(`Stock updated (${adjustment > 0 ? '+' : ''}${adjustment})`);
       await fetchInventory();
     }
 
     async function deleteInventoryItem(id) {
       if (!confirm('Delete this product from inventory?')) return;
       await authFetch(`/api/inventory/${id}`, { method: 'DELETE' });
+      showToast("Product deleted from inventory");
       await fetchInventory();
     }
 
@@ -778,21 +894,22 @@
       } catch (err) {}
     }
 
-    function addProductRow() {
+    function addProductRow(selectedProd = '', qty = 1) {
       const container = document.getElementById('productRowsContainer');
       const row = document.createElement('div');
       row.className = 'product-row';
 
-      let options = inventoryList.map(item => 
-        `<option value="${item.product_name}">${item.product_name} (${item.stock_quantity} in stock)</option>`
-      ).join('');
+      let options = inventoryList.map(item => {
+        const isSelected = item.product_name === selectedProd ? 'selected' : '';
+        return `<option value="${item.product_name}" ${isSelected}>${item.product_name} (${item.stock_quantity} in stock)</option>`;
+      }).join('');
 
       row.innerHTML = `
         <select class="prod-select" required>
-          <option value="" disabled selected>Select Product...</option>
+          <option value="" disabled ${!selectedProd ? 'selected' : ''}>Select Product...</option>
           ${options}
         </select>
-        <input type="number" class="prod-qty" value="1" min="1" placeholder="Qty" required>
+        <input type="number" class="prod-qty" value="${qty}" min="1" placeholder="Qty" required>
         <button type="button" class="btn-remove-row" onclick="this.parentElement.remove();">&times;</button>
       `;
       container.appendChild(row);
@@ -812,7 +929,7 @@
       } catch (err) {}
     }
 
-    async function fetchOrders() {
+    async function fetchOrders(silent = false) {
       const res = await authFetch('/api/orders');
       allOrders = await res.json();
       updateMetrics();
@@ -858,6 +975,10 @@
         const tr = document.createElement('tr');
         let phoneText = o.phone2 ? `${o.phone_number} / ${o.phone2}` : o.phone_number;
         let trackingText = o.tracking_id ? `NCM ID: ${o.tracking_id}` : 'Not Dispatched';
+        
+        // CONDITIONAL EDIT BUTTON RULE (ONLY FOR 'received' STATUS)
+        const canEdit = o.status === 'received';
+        const editButtonHtml = canEdit ? `<button class="btn-icon" onclick="openOrderModal(${o.id})" title="Edit Order">✏️</button>` : '';
 
         tr.innerHTML = `
           <td>
@@ -886,7 +1007,8 @@
           </td>
           <td>
             <div style="display:flex; gap:6px;">
-              <button class="btn-view-icon" onclick="openDetailModal(${o.id})" title="View NCM Details & Comments">👁️</button>
+              <button class="btn-icon" style="background:#fff1f2; color:#e11d48; border-color:#fecdd3;" onclick="openDetailModal(${o.id})" title="View Details & Comments">👁️</button>
+              ${editButtonHtml}
               <button class="btn-action" style="color:#dc2626; padding: 6px 10px; font-size:11px; min-height:36px;" onclick="deleteOrder(${o.id})">Delete</button>
             </div>
           </td>
@@ -897,7 +1019,12 @@
 
     document.getElementById('orderForm').onsubmit = async (e) => {
       e.preventDefault();
+      const btn = document.getElementById('btnSubmitOrder');
+      const editId = document.getElementById('editingOrderId').value;
       
+      btn.disabled = true;
+      btn.querySelector('span').innerText = editId ? "Updating Order..." : "Creating Order...";
+
       const items = [];
       document.querySelectorAll('.product-row').forEach(row => {
         const product_name = row.querySelector('.prod-select').value;
@@ -917,17 +1044,24 @@
         instruction: document.getElementById('instruction').value
       };
 
-      const res = await authFetch('/api/orders', {
-        method: 'POST',
+      const endpoint = editId ? `/api/orders/${editId}` : '/api/orders';
+      const method = editId ? 'PUT' : 'POST';
+
+      const res = await authFetch(endpoint, {
+        method: method,
         body: JSON.stringify(payload)
       });
 
       const data = await res.json();
+      btn.disabled = false;
+      btn.querySelector('span').innerText = "Save Order & Deduct Stock";
+
       if (!res.ok) {
-        alert(`Error creating order: ${data.error}`);
+        showToast(data.error || "Action failed", "error");
         return;
       }
 
+      showToast(editId ? "Order Updated Successfully!" : "Order Created Successfully!");
       closeOrderModal();
       fetchOrders();
       fetchInventory();
@@ -939,26 +1073,24 @@
         body: JSON.stringify({ status: newStatus })
       });
       const data = await res.json();
-      if (!res.ok) alert(`API Error: ${JSON.stringify(data.details || data.error)}`);
+      if (!res.ok) {
+        showToast(data.error || "Status update failed", "error");
+      } else {
+        showToast(`Order status updated to "${newStatus}"!`);
+      }
       fetchOrders();
-    }
-
-    async function syncNCM() {
-      try {
-        const res = await authFetch('/api/orders/sync', { method: 'POST' });
-        const data = await res.json();
-        if(data.success) {
-          alert(`Sync complete. ${data.synced} orders updated.`);
-          fetchOrders();
-        }
-      } catch (err) { alert('Sync failed.'); }
     }
 
     async function deleteOrder(id) {
       if (!confirm('Delete this order permanently and restore item stock?')) return;
-      await authFetch(`/api/orders/${id}`, { method: 'DELETE' });
-      await fetchOrders();
-      await fetchInventory();
+      const res = await authFetch(`/api/orders/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToast("Order Deleted & Stock Restored!");
+        await fetchOrders();
+        await fetchInventory();
+      } else {
+        showToast("Failed to delete order.", "error");
+      }
     }
   </script>
 </body>
