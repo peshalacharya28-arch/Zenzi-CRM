@@ -165,7 +165,6 @@
     .stock-ok { background: #dcfce7; color: #15803d; }
     .stock-low { background: #fee2e2; color: #b91c1c; }
 
-    /* TOAST NOTIFICATION CONTAINER */
     #toast-container {
       position: fixed; top: 20px; right: 20px; z-index: 9999;
       display: flex; flex-direction: column; gap: 8px; pointer-events: none;
@@ -180,7 +179,6 @@
     .toast-error { background: #dc2626; }
     .toast-success { background: #15803d; }
 
-    /* NCM DETAIL WINDOW STYLES */
     .ncm-header-banner {
       background: #0f172a; color: #fff; padding: 16px 20px; border-radius: 8px;
       display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
@@ -207,7 +205,6 @@
 </head>
 <body>
 
-  <!-- TOAST CONTAINER -->
   <div id="toast-container"></div>
 
   <div class="container">
@@ -515,7 +512,6 @@
     let activeOrderDetailId = null;
     let autoSyncInterval = null;
 
-    // TOAST NOTIFICATION SYSTEM
     function showToast(message, type = 'success') {
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
@@ -550,7 +546,6 @@
       return res;
     }
 
-    // INACTIVITY TIMER
     let inactivityTimer;
     const INACTIVITY_LIMIT = 20 * 60 * 1000;
 
@@ -603,7 +598,6 @@
           document.getElementById('deliveryType').value = order.delivery_type || 'Door2Door';
           document.getElementById('instruction').value = order.instruction || '';
 
-          // Parse items into dynamic rows
           if (order.package_name) {
             const itemsStr = order.package_name.split(',');
             itemsStr.forEach(str => {
@@ -645,7 +639,6 @@
       document.getElementById('analyticsModal').classList.remove('active');
     }
 
-    // NCM DETAIL WINDOW LOGIC
     async function openDetailModal(orderId) {
       activeOrderDetailId = orderId;
       const res = await authFetch(`/api/orders/${orderId}`);
@@ -671,17 +664,25 @@
       document.getElementById('detail-vref').innerText = order.vref_id || '-';
       document.getElementById('detail-to-branch').innerText = order.to_branch || 'KALANKI';
 
-      // Combine local CRM comments with NCM remote comments
       let combinedComments = order.comments || [];
-      if (order.ncm_comments && Array.isArray(order.ncm_comments)) {
-        order.ncm_comments.forEach(ncmC => {
-          combinedComments.push({
-            id: ncmC.id || Date.now(),
-            author: 'NCM Agent / Rider',
-            text: ncmC.comment || ncmC.text || ncmC,
-            timestamp: ncmC.created_at || new Date().toISOString()
+      if (order.ncm_remote_comments) {
+        if (Array.isArray(order.ncm_remote_comments)) {
+          order.ncm_remote_comments.forEach(ncmC => {
+            combinedComments.push({
+              id: Date.now(),
+              author: 'NCM Rider/Agent',
+              text: typeof ncmC === 'string' ? ncmC : (ncmC.comment || ncmC.text || JSON.stringify(ncmC)),
+              timestamp: new Date().toISOString()
+            });
           });
-        });
+        } else {
+          combinedComments.push({
+            id: Date.now(),
+            author: 'NCM Rider/Agent',
+            text: String(order.ncm_remote_comments),
+            timestamp: new Date().toISOString()
+          });
+        }
       }
 
       renderComments(combinedComments);
@@ -739,10 +740,10 @@
       btn.querySelector('span').innerText = "Post Note";
 
       if (res.ok) {
-        showToast("Comment posted successfully!");
+        const updatedOrder = await res.json();
+        showToast(updatedOrder.ncm_synced ? "Comment posted & synced to NCM!" : "Comment saved locally!");
         document.getElementById('newCommentText').value = '';
         toggleCommentInput();
-        const updatedOrder = await res.json();
         renderComments(updatedOrder.comments || []);
         fetchOrders();
       } else {
@@ -759,11 +760,12 @@
         fetchInventory();
         fetchOrders();
 
-        // START LIVE AUTOMATIC BACKGROUND POLLING (EVERY 30 SECONDS)
-        autoSyncInterval = setInterval(() => {
+        // RUN LIVE BACKGROUND SYNC EVERY 15 SECONDS
+        autoSyncInterval = setInterval(async () => {
+          await authFetch('/api/orders/sync', { method: 'POST' });
           fetchOrders(true);
           fetchInventory(true);
-        }, 30000);
+        }, 15000);
       }
     }).catch(() => { window.location.href = '/index.html'; });
 
@@ -976,7 +978,6 @@
         let phoneText = o.phone2 ? `${o.phone_number} / ${o.phone2}` : o.phone_number;
         let trackingText = o.tracking_id ? `NCM ID: ${o.tracking_id}` : 'Not Dispatched';
         
-        // CONDITIONAL EDIT BUTTON RULE (ONLY FOR 'received' STATUS)
         const canEdit = o.status === 'received';
         const editButtonHtml = canEdit ? `<button class="btn-icon" onclick="openOrderModal(${o.id})" title="Edit Order">✏️</button>` : '';
 
