@@ -15,8 +15,8 @@ app.use(helmet({ contentSecurityPolicy: false }));
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
-  message: { error: 'Too many requests. Please wait a few minutes.' }
+  max: 300,
+  message: { error: 'Too many requests. Please wait.' }
 });
 app.use('/api/', apiLimiter);
 
@@ -95,7 +95,85 @@ const verifyAuth = async (req, res, next) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 
-// --- INVENTORY ENDPOINTS ---
+// --- CORE NCM BACKGROUND SYNC ENGINE (10-MIN INTERVAL) ---
+async function syncOrdersWithNCM() {
+  try {
+    const activeOrders = await pool.query("SELECT * FROM orders WHERE tracking_id IS NOT NULL AND status IN ('packed', 'processing')");
+    const now = new Date();
+
+    for (const order of activeOrders.rows) {
+      try {
+        // 1. Fetch NCM Live Status
+        const statusRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/status?id=${order.tracking_id}`, {
+          headers: { 'Authorization': `Token ${NCM_TOKEN}` },
+          timeout: 8000
+        });
+
+        let newStatus = order.status;
+        const statusText = JSON.stringify(statusRes.data).toUpperCase();
+
+        if (statusText.includes('DELIVERED')) {
+          newStatus = 'delivered';
+        } else if (statusText.includes('DISPATCH') || statusText.includes('TRANSIT') || statusText.includes('SENT FOR DELIVERY')) {
+          newStatus = 'processing';
+        } else if (statusText.includes('CANCEL') || statusText.includes('RETURN') || statusText.includes('REJECTED')) {
+          newStatus = 'problem';
+        }
+
+        // 2. 3-Day Timeout Check (Mark Problematic if >72h in processing)
+        if (newStatus === 'processing' || order.status === 'processing') {
+          const lastUpdate = new Date(order.status_updated_at || order.created_at);
+          const hoursElapsed = (now - lastUpdate) / (1000 * 60 * 60);
+
+          if (hoursElapsed >= 72) {
+            newStatus = 'problem';
+            const autoComment = {
+              id: Date.now(),
+              text: "⚠️ System Auto-Escalation: Order was not delivered within 3 days (72h) of processing.",
+              author: "System Bot",
+              timestamp: now.toISOString()
+            };
+            await pool.query(
+              `UPDATE orders SET comments = COALESCE(comments, '[]'::jsonb) || $1::jsonb WHERE id = $2`,
+              [JSON.stringify([autoComment]), order.id]
+            );
+          }
+        }
+
+        // 3. Fetch NCM Comments using Official GET /api/v1/order/comment?id=ORDERID
+        const commentRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/comment?id=${order.tracking_id}`, {
+          headers: { 'Authorization': `Token ${NCM_TOKEN}` },
+          timeout: 8000
+        });
+
+        let updatedCommentsList = [];
+        if (Array.isArray(commentRes.data)) {
+          commentRes.data.forEach(item => {
+            updatedCommentsList.push({
+              id: item.added_time || Date.now(),
+              text: item.comments,
+              author: item.addedBy || 'NCM Staff',
+              timestamp: item.added_time || new Date().toISOString()
+            });
+          });
+        }
+
+        await pool.query(
+          "UPDATE orders SET status = $1, status_updated_at = CURRENT_TIMESTAMP, comments = $2 WHERE id = $3",
+          [newStatus, JSON.stringify(updatedCommentsList), order.id]
+        );
+
+      } catch (err) {}
+    }
+  } catch (err) {
+    console.error('NCM Sync Error:', err);
+  }
+}
+
+// Automatic 10-Minute Cron Run
+setInterval(syncOrdersWithNCM, 10 * 60 * 1000);
+
+// --- INVENTORY API ---
 app.get('/api/inventory', verifyAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM inventory ORDER BY product_name ASC');
@@ -174,7 +252,7 @@ app.get('/api/analytics', verifyAuth, async (req, res) => {
   }
 });
 
-// --- ORDERS & LIVE NCM STATUS SYNC ---
+// --- ORDERS & LIVE DETAILS ---
 app.get('/api/branches', verifyAuth, async (req, res) => {
   try {
     const response = await axios.get('https://portal.nepalcanmove.com/api/v2/branches', {
@@ -197,6 +275,7 @@ app.get('/api/orders', verifyAuth, async (req, res) => {
   }
 });
 
+// FETCH SINGLE ORDER + LIVE NCM COMMENTS VIA DOCUMENTED GET ENDPOINT
 app.get('/api/orders/:id', verifyAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
@@ -206,18 +285,25 @@ app.get('/api/orders/:id', verifyAuth, async (req, res) => {
 
     if (order.tracking_id) {
       try {
-        const ncmRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/status?id=${order.tracking_id}`, {
+        const commentRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/comment?id=${order.tracking_id}`, {
           headers: { 'Authorization': `Token ${NCM_TOKEN}` },
-          timeout: 5000
+          timeout: 6000
         });
 
-        if (ncmRes.data) {
-          if (ncmRes.data.comments || ncmRes.data.comment) {
-            order.ncm_remote_comments = ncmRes.data.comments || ncmRes.data.comment;
-          }
-          if (ncmRes.data.status) {
-            order.ncm_live_status = ncmRes.data.status;
-          }
+        if (Array.isArray(commentRes.data)) {
+          let ncmCommentsParsed = [];
+          commentRes.data.forEach(item => {
+            ncmCommentsParsed.push({
+              id: item.added_time || Date.now(),
+              text: item.comments,
+              author: item.addedBy || 'NCM Staff',
+              timestamp: item.added_time || new Date().toISOString()
+            });
+          });
+
+          // Update CRM database with fresh NCM comments list
+          await pool.query('UPDATE orders SET comments = $1 WHERE id = $2', [JSON.stringify(ncmCommentsParsed), order.id]);
+          order.comments = ncmCommentsParsed;
         }
       } catch (err) {}
     }
@@ -228,7 +314,7 @@ app.get('/api/orders/:id', verifyAuth, async (req, res) => {
   }
 });
 
-// FIXED COMMENT POSTING & NCM SYNC
+// POST COMMENT TO NCM API (USING EXACT OFFICIAL ENDPOINT POST /api/v1/comment)
 app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
   const { text } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'Comment text is required' });
@@ -238,26 +324,35 @@ app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
     const order = orderRes.rows[0];
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
+    let ncmPushed = false;
+    if (order.tracking_id) {
+      try {
+        // Send to official NCM endpoint
+        const ncmRes = await axios.post('https://portal.nepalcanmove.com/api/v1/comment', {
+          orderid: String(order.tracking_id),
+          comments: text.trim()
+        }, {
+          headers: { 
+            'Authorization': `Token ${NCM_TOKEN}`, 
+            'Content-Type': 'application/json' 
+          },
+          timeout: 8000
+        });
+
+        if (ncmRes.status === 200 || ncmRes.status === 201) {
+          ncmPushed = true;
+        }
+      } catch (err) {
+        console.error('NCM Post Comment Error:', err.response ? err.response.data : err.message);
+      }
+    }
+
     const commentObj = {
       id: Date.now(),
       text: text.trim(),
-      author: req.user.email || 'Admin User',
+      author: 'Vendor (Zenzi)',
       timestamp: new Date().toISOString()
     };
-
-    let ncmSynced = false;
-    if (order.tracking_id) {
-      try {
-        await axios.post('https://portal.nepalcanmove.com/api/v1/order/comment', {
-          orderid: order.tracking_id,
-          comment: text.trim()
-        }, {
-          headers: { 'Authorization': `Token ${NCM_TOKEN}`, 'Content-Type': 'application/json' },
-          timeout: 5000
-        });
-        ncmSynced = true;
-      } catch (err) {}
-    }
 
     const updatedRes = await pool.query(
       `UPDATE orders 
@@ -266,7 +361,7 @@ app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
       [JSON.stringify([commentObj]), req.params.id]
     );
 
-    res.json({ ...updatedRes.rows[0], ncm_synced: ncmSynced });
+    res.json({ ...updatedRes.rows[0], ncm_pushed: ncmPushed });
   } catch (err) {
     res.status(500).json({ error: 'Failed to add comment' });
   }
@@ -409,7 +504,6 @@ app.post('/api/orders', verifyAuth, async (req, res) => {
   }
 });
 
-// STATUS UPDATE & NCM DISPATCH TRIGGER
 app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
   const { status } = req.body;
   const orderId = req.params.id;
@@ -465,74 +559,9 @@ app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
   }
 });
 
-// FIXED NCM SYNC ROUTINE WITH 3-DAY AUTOMATIC PROBLEM ESCALATION
 app.post('/api/orders/sync', verifyAuth, async (req, res) => {
-  try {
-    const activeOrders = await pool.query("SELECT * FROM orders WHERE status IN ('packed', 'processing')");
-    let updatedCount = 0;
-    const now = new Date();
-
-    for (const order of activeOrders.rows) {
-      let newStatus = order.status;
-
-      // 1. Fetch live status from NCM if tracking ID exists
-      if (order.tracking_id) {
-        try {
-          const response = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/status?id=${order.tracking_id}`, {
-            headers: { 'Authorization': `Token ${NCM_TOKEN}` },
-            timeout: 5000
-          });
-
-          const ncmData = response.data;
-          const statusText = (typeof ncmData === 'string' ? ncmData : JSON.stringify(ncmData)).toUpperCase();
-
-          if (statusText.includes('DELIVERED')) {
-            newStatus = 'delivered';
-          } else if (statusText.includes('DISPATCH') || statusText.includes('TRANSIT') || statusText.includes('OUT FOR DELIVERY')) {
-            newStatus = 'processing';
-          } else if (statusText.includes('CANCEL') || statusText.includes('RETURN') || statusText.includes('REJECTED')) {
-            newStatus = 'problem';
-          }
-        } catch (err) {}
-      }
-
-      // 2. CHECK 3-DAY (72 HOURS) TIMEOUT FOR PROCESSING ORDERS
-      if (newStatus === 'processing' || order.status === 'processing') {
-        const lastUpdate = new Date(order.status_updated_at || order.created_at);
-        const hoursElapsed = (now - lastUpdate) / (1000 * 60 * 60);
-
-        if (hoursElapsed >= 72) {
-          newStatus = 'problem';
-
-          // Auto-append system escalation comment
-          const autoComment = {
-            id: Date.now(),
-            text: "⚠️ System Auto-Escalation: Order was not delivered within 3 days (72h) of processing.",
-            author: "System Bot",
-            timestamp: now.toISOString()
-          };
-
-          await pool.query(
-            `UPDATE orders SET comments = COALESCE(comments, '[]'::jsonb) || $1::jsonb WHERE id = $2`,
-            [JSON.stringify([autoComment]), order.id]
-          );
-        }
-      }
-
-      // Update status if changed
-      if (newStatus !== order.status) {
-        await pool.query(
-          "UPDATE orders SET status = $1, status_updated_at = CURRENT_TIMESTAMP WHERE id = $2",
-          [newStatus, order.id]
-        );
-        updatedCount++;
-      }
-    }
-
-    res.json({ success: true, synced: updatedCount });
-  } catch (err) {
-    res.status(500).json({ error: 'Sync failed' });
-  }
+  await syncOrdersWithNCM();
+  res.json({ success: true });
 });
 
 app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
