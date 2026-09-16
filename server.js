@@ -115,8 +115,10 @@ const verifyAuth = async (req, res, next) => {
   next();
 };
 
+// Static HTML Page Serving
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+app.get('/analytics', (req, res) => res.sendFile(path.join(__dirname, 'public', 'analytics.html')));
 
 // --- CONCURRENT BACKGROUND NCM SYNC ENGINE ---
 async function syncOrdersWithNCM() {
@@ -287,7 +289,7 @@ app.delete('/api/inventory/:id', verifyAuth, async (req, res) => {
   }
 });
 
-// --- ANALYTICS ENDPOINT ---
+// --- ANALYTICS ENDPOINTS ---
 app.get('/api/analytics', verifyAuth, async (req, res) => {
   try {
     const totalOrdersRes = await pool.query('SELECT COUNT(*) FROM orders');
@@ -314,6 +316,123 @@ app.get('/api/analytics', verifyAuth, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to calculate analytics metrics' });
+  }
+});
+
+// Full-Page Dynamic Analytics & Growth Endpoint
+app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
+  const { startDate, endDate } = req.query;
+
+  const now = new Date();
+  const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const end = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+  const startISO = start.toISOString();
+  const endISO = end.toISOString();
+
+  try {
+    // 1. Total Volume & Status Aggregates
+    const volumeRes = await pool.query(
+      `SELECT 
+         COUNT(*) as total_orders,
+         COUNT(*) FILTER (WHERE status = 'delivered') as delivered_orders,
+         COUNT(*) FILTER (WHERE status IN ('problem', 'hold')) as problem_stalled_orders,
+         COUNT(*) FILTER (WHERE status IN ('problem', 'returned', 'cancelled')) as rto_orders,
+         COALESCE(SUM(CAST(NULLIF(cod_amount, '') AS NUMERIC)) FILTER (WHERE status = 'delivered'), 0) as total_delivered_revenue
+       FROM orders 
+       WHERE created_at BETWEEN $1 AND $2`,
+      [startISO, endISO]
+    );
+
+    const stats = volumeRes.rows[0];
+    const totalOrders = parseInt(stats.total_orders) || 0;
+    const deliveredOrders = parseInt(stats.delivered_orders) || 0;
+    const problemStalledOrders = parseInt(stats.problem_stalled_orders) || 0;
+    const rtoOrders = parseInt(stats.rto_orders) || 0;
+    const totalDeliveredRevenue = parseFloat(stats.total_delivered_revenue) || 0;
+
+    const deliverySuccessRate = totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toFixed(1) : "0.0";
+    const rtoRate = totalOrders > 0 ? ((rtoOrders / totalOrders) * 100).toFixed(1) : "0.0";
+    const bottleneckRate = totalOrders > 0 ? ((problemStalledOrders / totalOrders) * 100).toFixed(1) : "0.0";
+
+    // 2. Average Transit Lead Time
+    const leadTimeRes = await pool.query(
+      `SELECT 
+         COALESCE(AVG(EXTRACT(EPOCH FROM (status_updated_at - COALESCE(processing_started_at, created_at))) / 3600), 0) as avg_transit_hours
+       FROM orders 
+       WHERE status = 'delivered' AND created_at BETWEEN $1 AND $2`,
+      [startISO, endISO]
+    );
+    const avgTransitHours = parseFloat(leadTimeRes.rows[0].avg_transit_hours || 0).toFixed(1);
+
+    // 3. Top Destination Branches Breakdown
+    const branchRes = await pool.query(
+      `SELECT to_branch, COUNT(*) as order_count 
+       FROM orders 
+       WHERE created_at BETWEEN $1 AND $2 
+       GROUP BY to_branch 
+       ORDER BY order_count DESC 
+       LIMIT 10`,
+      [startISO, endISO]
+    );
+
+    // 4. Product Sales Velocity
+    const periodOrdersRes = await pool.query(
+      `SELECT package_name FROM orders WHERE created_at BETWEEN $1 AND $2 AND package_name IS NOT NULL`,
+      [startISO, endISO]
+    );
+
+    const productSalesMap = {};
+    let totalUnitsSoldInPeriod = 0;
+
+    periodOrdersRes.rows.forEach(row => {
+      const items = String(row.package_name).split(',');
+      items.forEach(itemStr => {
+        const match = itemStr.trim().match(/^(\d+)x\s+(.+)$/);
+        if (match) {
+          const qty = parseInt(match[1]) || 1;
+          const pName = match[2].trim();
+          productSalesMap[pName] = (productSalesMap[pName] || 0) + qty;
+          totalUnitsSoldInPeriod += qty;
+        }
+      });
+    });
+
+    const inventoryRes = await pool.query(`SELECT product_name, stock_quantity, sku FROM inventory ORDER BY product_name ASC`);
+    
+    const velocityList = inventoryRes.rows.map(inv => {
+      const unitsSold = productSalesMap[inv.product_name] || 0;
+      const share = totalUnitsSoldInPeriod > 0 ? ((unitsSold / totalUnitsSoldInPeriod) * 100).toFixed(1) : "0.0";
+      return {
+        product_name: inv.product_name,
+        sku: inv.sku || '-',
+        stock_quantity: inv.stock_quantity,
+        units_sold: unitsSold,
+        volume_share: `${share}%`
+      };
+    });
+
+    const topMovingProducts = [...velocityList].sort((a, b) => b.units_sold - a.units_sold).slice(0, 10);
+    const slowMovingProducts = [...velocityList].sort((a, b) => a.units_sold - b.units_sold).slice(0, 10);
+
+    res.json({
+      timeframe: { startDate: startISO, endDate: endISO },
+      summary: {
+        totalOrders,
+        totalDeliveredRevenue,
+        deliverySuccessRate: `${deliverySuccessRate}%`,
+        rtoRate: `${rtoRate}%`,
+        bottleneckRate: `${bottleneckRate}%`,
+        avgTransitHours: `${avgTransitHours} hrs`
+      },
+      topBranches: branchRes.rows,
+      topMovingProducts,
+      slowMovingProducts
+    });
+
+  } catch (err) {
+    console.error('Analytics engine calculation error:', err);
+    res.status(500).json({ error: 'Failed to calculate dynamic analytics dataset' });
   }
 });
 
@@ -347,7 +466,6 @@ app.get('/api/orders/:id', verifyAuth, async (req, res) => {
     
     const order = result.rows[0];
 
-    // Fetch live NCM comments directly on modal open
     if (order.tracking_id) {
       try {
         const commentRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/comment?id=${order.tracking_id}`, {
@@ -420,7 +538,6 @@ app.post('/api/orders', verifyAuth, async (req, res) => {
               throw new Error(`Insufficient stock for "${product_name}". Available: ${currentStock}, Requested: ${requestedQty}`);
             }
 
-            // Atomic Stock Deduction
             await client.query(
               'UPDATE inventory SET stock_quantity = GREATEST(0, stock_quantity - $1) WHERE product_name = $2',
               [requestedQty, product_name]
@@ -479,7 +596,6 @@ app.put('/api/orders/:id', verifyAuth, async (req, res) => {
       throw new Error('Order cannot be edited once it has passed "Received" status');
     }
 
-    // 1. Restore previous stock items atomically
     if (currentOrder.package_name) {
       const prevItems = currentOrder.package_name.split(',').map(i => i.trim());
       for (const itemStr of prevItems) {
@@ -493,7 +609,6 @@ app.put('/api/orders/:id', verifyAuth, async (req, res) => {
       }
     }
 
-    // 2. Validate & deduct new items atomically
     let packageSummaryParts = [];
     if (Array.isArray(items) && items.length > 0) {
       for (const item of items) {
@@ -610,7 +725,6 @@ app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
       const shortTimestamp = Date.now().toString().slice(-6);
       const vref = `Z${shortTimestamp}`;
 
-      // Strictly sanitize phone payload right before building Axios JSON
       const cleanPhone = sanitizePhone(order.phone_number);
       const cleanPhone2 = sanitizePhone(order.phone2);
 

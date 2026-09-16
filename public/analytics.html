@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Zenzi Shop — Operations & Growth Intelligence</title>
+  <link rel="icon" type="image/png" href="/favicon.png?v=2">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <style>
+    :root {
+      --bg-light: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #0f172a;
+      --text-sub: #64748b;
+      --border-color: #e2e8f0;
+      --primary-blue: #0284c7;
+      --accent-badge: #f1f5f9;
+      --success-green: #16a34a;
+      --danger-red: #dc2626;
+      --warning-amber: #d97706;
+    }
+
+    * { box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-light);
+      margin: 0;
+      padding: clamp(12px, 3vw, 32px);
+      color: var(--text-main);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .container { max-width: 1400px; margin: 0 auto; width: 100%; }
+
+    /* Nav Bar Header */
+    .top-nav {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 24px; flex-wrap: wrap; gap: 16px;
+    }
+
+    .btn-back {
+      background: #0f172a; color: #ffffff; border: none;
+      padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 14px;
+      cursor: pointer; text-decoration: none; display: inline-flex; align-items: center;
+      gap: 8px; min-height: 46px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      touch-action: manipulation;
+    }
+    .btn-back:hover { background: #1e293b; }
+
+    .header-title-box h1 { font-size: clamp(22px, 4vw, 28px); font-weight: 800; margin: 0; color: var(--text-main); }
+    .header-title-box p { font-size: 13px; color: var(--text-sub); margin: 4px 0 0 0; }
+
+    /* Date Filter Controls Bar */
+    .filter-card {
+      background: var(--card-bg); border: 1px solid var(--border-color);
+      border-radius: 12px; padding: 14px 16px; margin-bottom: 24px;
+      display: flex; flex-direction: column; gap: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    @media (min-width: 900px) {
+      .filter-card { flex-direction: row; justify-content: space-between; align-items: center; }
+    }
+
+    .filter-pills {
+      display: flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px;
+      overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%;
+    }
+    @media (min-width: 900px) { .filter-pills { width: auto; } }
+
+    .pill-btn {
+      padding: 10px 16px; border: none; background: transparent; font-size: 12px; font-weight: 700;
+      color: var(--text-sub); cursor: pointer; border-radius: 6px; white-space: nowrap; flex: 1; text-align: center;
+      min-height: 40px;
+    }
+    .pill-btn.active { background: #ffffff; color: var(--text-main); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+
+    .custom-date-box {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 100%;
+    }
+    @media (min-width: 900px) { .custom-date-box { width: auto; } }
+
+    .custom-date-box input[type="date"] {
+      padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px;
+      font-size: 13px; outline: none; background: #fafafa; min-height: 42px; flex: 1;
+    }
+    .btn-apply {
+      background: var(--primary-blue); color: #fff; border: none; border-radius: 8px;
+      padding: 10px 16px; font-weight: 700; font-size: 13px; cursor: pointer; min-height: 42px;
+    }
+
+    /* KPI Metrics Grid */
+    .metrics-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 24px;
+    }
+    @media (min-width: 768px) { .metrics-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (min-width: 1200px) { .metrics-grid { grid-template-columns: repeat(6, 1fr); } }
+
+    .kpi-card {
+      background: var(--card-bg); border: 1px solid var(--border-color);
+      border-radius: 12px; padding: 16px; display: flex; flex-direction: column;
+      justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    .kpi-label { font-size: 11px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-value { font-size: clamp(20px, 3vw, 24px); font-weight: 800; margin-top: 8px; color: var(--text-main); }
+    .kpi-sub { font-size: 11px; margin-top: 6px; font-weight: 600; color: var(--text-sub); }
+
+    /* Dashboard Data Sections */
+    .dashboard-grid {
+      display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 24px;
+    }
+    @media (min-width: 1024px) { .dashboard-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .data-card {
+      background: var(--card-bg); border: 1px solid var(--border-color);
+      border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+
+    .card-header {
+      font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;
+      margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;
+      color: var(--text-main); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;
+    }
+
+    .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; border-collapse: collapse; text-align: left; min-width: 480px; }
+    th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-sub); padding: 10px 12px; border-bottom: 1px solid var(--border-color); }
+    td { padding: 12px; border-bottom: 1px solid var(--border-color); font-size: 13px; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+
+    .badge-velocity { padding: 4px 8px; border-radius: 12px; font-weight: 700; font-size: 11px; }
+    .badge-fast { background: #dcfce7; color: #15803d; }
+    .badge-slow { background: #fee2e2; color: #b91c1c; }
+
+    #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
+    .toast { background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div id="toast-container"></div>
+
+  <div class="container">
+    
+    <!-- Top Navigation Header -->
+    <div class="top-nav">
+      <div class="header-title-box">
+        <h1>Analytics & Operational Intelligence</h1>
+        <p>Dynamic performance data, stock velocity, and courier SLAs.</p>
+      </div>
+      <a href="/dashboard" class="btn-back">← Back to Directory</a>
+    </div>
+
+    <!-- Dynamic Date Filter Controls -->
+    <div class="filter-card">
+      <div class="filter-pills">
+        <button class="pill-btn active" onclick="setPresetTimeframe('today', this)">Today</button>
+        <button class="pill-btn" onclick="setPresetTimeframe('yesterday', this)">Yesterday</button>
+        <button class="pill-btn" onclick="setPresetTimeframe('last7', this)">Last 7 Days</button>
+        <button class="pill-btn" onclick="setPresetTimeframe('thisMonth', this)">This Month</button>
+        <button class="pill-btn" onclick="setPresetTimeframe('lastMonth', this)">Last Month</button>
+      </div>
+      
+      <div class="custom-date-box">
+        <input type="date" id="startDateInput">
+        <span style="font-size: 12px; font-weight: 700; color: var(--text-sub);">TO</span>
+        <input type="date" id="endDateInput">
+        <button class="btn-apply" onclick="applyCustomDateRange()">Apply Range</button>
+      </div>
+    </div>
+
+    <!-- KPI Metric Cards Grid -->
+    <div class="metrics-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Total Volume</div>
+        <div class="kpi-value" id="kpi-volume">0</div>
+        <div class="kpi-sub">Orders in period</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">COD Revenue</div>
+        <div class="kpi-value" id="kpi-revenue" style="color: var(--primary-blue);">NPR 0</div>
+        <div class="kpi-sub">Delivered volume</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">Delivery Rate</div>
+        <div class="kpi-value" id="kpi-delivery-rate" style="color: var(--success-green);">0.0%</div>
+        <div class="kpi-sub">Success conversion</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">RTO & Rejection Rate</div>
+        <div class="kpi-value" id="kpi-rto-rate" style="color: var(--danger-red);">0.0%</div>
+        <div class="kpi-sub">Returned / Failed</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">Bottleneck Rate</div>
+        <div class="kpi-value" id="kpi-bottleneck" style="color: var(--warning-amber);">0.0%</div>
+        <div class="kpi-sub">Stalled in problem/hold</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">Transit Lead Time</div>
+        <div class="kpi-value" id="kpi-lead-time">0.0 hrs</div>
+        <div class="kpi-sub">Avg courier SLA</div>
+      </div>
+    </div>
+
+    <!-- Product Velocity & Destination Analysis Tables -->
+    <div class="dashboard-grid">
+      
+      <!-- Top Moving Products (Fast Velocity) -->
+      <div class="data-card">
+        <div class="card-header">
+          <span>🚀 Top Selling Products (Inventory Velocity)</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Product Name</th>
+                <th>SKU</th>
+                <th>Units Sold</th>
+                <th>Volume Share</th>
+                <th>Stock Left</th>
+              </tr>
+            </thead>
+            <tbody id="topProductsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Slow Moving Products -->
+      <div class="data-card">
+        <div class="card-header">
+          <span>⚠️ Slowest Moving Inventory</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Product Name</th>
+                <th>SKU</th>
+                <th>Units Sold</th>
+                <th>Current Stock</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="slowProductsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Top Destination Branches Breakdown -->
+      <div class="data-card" style="grid-column: 1 / -1;">
+        <div class="card-header">
+          <span>📍 Top Destination Logistics Hubs</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Destination Branch</th>
+                <th>Order Packages Handled</th>
+                <th>Distribution Share</th>
+              </tr>
+            </thead>
+            <tbody id="topBranchesBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
+
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { storage: window.sessionStorage, persistSession: true }
+    });
+
+    let currentAccessToken = "";
+    let activeStartDate = "";
+    let activeEndDate = "";
+
+    function showToast(message) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.innerText = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    async function authFetch(url) {
+      if (!currentAccessToken) {
+        const sessionRes = await dbClient.auth.getSession();
+        currentAccessToken = sessionRes.data?.session?.access_token || "";
+      }
+
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${currentAccessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = '/index.html';
+      }
+      return res;
+    }
+
+    // Date Utilities
+    function formatDate(d) {
+      return d.toISOString().split('T')[0];
+    }
+
+    function setPresetTimeframe(preset, btnElement) {
+      document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+      if (btnElement) btnElement.classList.add('active');
+
+      const now = new Date();
+      let start = new Date();
+      let end = new Date();
+
+      if (preset === 'today') {
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      } else if (preset === 'yesterday') {
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59);
+      } else if (preset === 'last7') {
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      } else if (preset === 'thisMonth') {
+        start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      } else if (preset === 'lastMonth') {
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      }
+
+      document.getElementById('startDateInput').value = formatDate(start);
+      document.getElementById('endDateInput').value = formatDate(end);
+
+      activeStartDate = start.toISOString();
+      activeEndDate = end.toISOString();
+
+      loadAnalyticsData();
+    }
+
+    function applyCustomDateRange() {
+      const s = document.getElementById('startDateInput').value;
+      const e = document.getElementById('endDateInput').value;
+
+      if (!s || !e) {
+        showToast("Please select both start and end dates");
+        return;
+      }
+
+      document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+
+      const start = new Date(`${s}T00:00:00`);
+      const end = new Date(`${e}T23:59:59`);
+
+      activeStartDate = start.toISOString();
+      activeEndDate = end.toISOString();
+
+      loadAnalyticsData();
+    }
+
+    async function loadAnalyticsData() {
+      try {
+        const url = `/api/analytics/overview?startDate=${encodeURIComponent(activeStartDate)}&endDate=${encodeURIComponent(activeEndDate)}`;
+        const res = await authFetch(url);
+        const data = await res.json();
+
+        // Render KPI Cards
+        document.getElementById('kpi-volume').innerText = data.summary.totalOrders.toLocaleString();
+        document.getElementById('kpi-revenue').innerText = `NPR ${data.summary.totalDeliveredRevenue.toLocaleString()}`;
+        document.getElementById('kpi-delivery-rate').innerText = data.summary.deliverySuccessRate;
+        document.getElementById('kpi-rto-rate').innerText = data.summary.rtoRate;
+        document.getElementById('kpi-bottleneck').innerText = data.summary.bottleneckRate;
+        document.getElementById('kpi-lead-time').innerText = data.summary.avgTransitHours;
+
+        // Render Top Moving Products
+        const topBody = document.getElementById('topProductsBody');
+        topBody.innerHTML = '';
+        if (data.topMovingProducts.length === 0) {
+          topBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-sub);">No sales recorded in period.</td></tr>`;
+        } else {
+          data.topMovingProducts.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td><strong>${p.product_name}</strong></td>
+              <td>${p.sku}</td>
+              <td><strong>${p.units_sold} units</strong></td>
+              <td><span class="badge-velocity badge-fast">${p.volume_share}</span></td>
+              <td>${p.stock_quantity} left</td>
+            `;
+            topBody.appendChild(tr);
+          });
+        }
+
+        // Render Slow Moving Products
+        const slowBody = document.getElementById('slowProductsBody');
+        slowBody.innerHTML = '';
+        if (data.slowMovingProducts.length === 0) {
+          slowBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-sub);">No inventory items recorded.</td></tr>`;
+        } else {
+          data.slowMovingProducts.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td><strong>${p.product_name}</strong></td>
+              <td>${p.sku}</td>
+              <td>${p.units_sold} units</td>
+              <td>${p.stock_quantity} available</td>
+              <td><span class="badge-velocity badge-slow">${p.units_sold === 0 ? 'Zero Sales' : 'Slow Velocity'}</span></td>
+            `;
+            slowBody.appendChild(tr);
+          });
+        }
+
+        // Render Top Destination Branches
+        const branchBody = document.getElementById('topBranchesBody');
+        branchBody.innerHTML = '';
+        if (data.topBranches.length === 0) {
+          branchBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color: var(--text-sub);">No branch shipments recorded.</td></tr>`;
+        } else {
+          const totalBranchOrders = data.summary.totalOrders || 1;
+          data.topBranches.forEach(b => {
+            const share = ((b.order_count / totalBranchOrders) * 100).toFixed(1);
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td><strong>${b.to_branch || 'KALANKI'}</strong></td>
+              <td><strong>${b.order_count} packages</strong></td>
+              <td>${share}% of total dispatches</td>
+            `;
+            branchBody.appendChild(tr);
+          });
+        }
+
+      } catch (err) {
+        showToast("Failed to fetch analytics metrics");
+      }
+    }
+
+    // Initialize Session & Default Today View
+    dbClient.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        window.location.href = '/index.html';
+      } else {
+        currentAccessToken = session.access_token;
+        setPresetTimeframe('today', document.querySelector('.pill-btn.active'));
+      }
+    }).catch(() => { window.location.href = '/index.html'; });
+  </script>
+</body>
+</html>
