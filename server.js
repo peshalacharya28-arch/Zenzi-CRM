@@ -97,7 +97,7 @@ const verifyAuth = async (req, res, next) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 
-// --- CORE NCM BACKGROUND SYNC ENGINE (10-MIN INTERVAL) ---
+// --- CORE NCM BACKGROUND SYNC ENGINE ---
 async function syncOrdersWithNCM() {
   try {
     const activeOrders = await pool.query("SELECT * FROM orders WHERE tracking_id IS NOT NULL AND status IN ('packed', 'processing')");
@@ -113,21 +113,37 @@ async function syncOrdersWithNCM() {
 
         let newStatus = order.status;
         let processingTimestamp = order.processing_started_at;
-        const statusText = JSON.stringify(statusRes.data).toUpperCase();
 
-        if (statusText.includes('DELIVERED')) {
+        // Parse ONLY the latest status object from NCM (index 0)
+        let latestNcmStatusStr = '';
+        if (Array.isArray(statusRes.data) && statusRes.data.length > 0) {
+          latestNcmStatusStr = String(statusRes.data[0].status || '').toUpperCase();
+        } else if (typeof statusRes.data === 'object' && statusRes.data.status) {
+          latestNcmStatusStr = String(statusRes.data.status).toUpperCase();
+        }
+
+        // Map status based STRICTLY on the latest status entry
+        if (latestNcmStatusStr.includes('DELIVERED')) {
           newStatus = 'delivered';
-        } else if (statusText.includes('DISPATCH') || statusText.includes('TRANSIT') || statusText.includes('SENT FOR DELIVERY')) {
+        } else if (
+          latestNcmStatusStr.includes('DISPATCH') || 
+          latestNcmStatusStr.includes('TRANSIT') || 
+          latestNcmStatusStr.includes('SENT FOR DELIVERY') ||
+          latestNcmStatusStr.includes('OUT FOR DELIVERY')
+        ) {
           newStatus = 'processing';
-          // Record the exact time when it enters processing for the first time
           if (!processingTimestamp) {
             processingTimestamp = new Date();
           }
-        } else if (statusText.includes('CANCEL') || statusText.includes('RETURN') || statusText.includes('REJECTED')) {
+        } else if (
+          latestNcmStatusStr.includes('CANCEL') || 
+          latestNcmStatusStr.includes('RETURN') || 
+          latestNcmStatusStr.includes('REJECTED')
+        ) {
           newStatus = 'problem';
         }
 
-        // 2. STRICT 3-DAY TIMEOUT CHECK (ONLY EXECUTES IF ALREADY IN PROCESSING PHASE)
+        // 2. STRICT 3-DAY TIMEOUT CHECK (ONLY EXECUTES IF IN PROCESSING PHASE WITH A TIMESTAMP)
         if (newStatus === 'processing' && processingTimestamp) {
           const processStart = new Date(processingTimestamp);
           const hoursInProcessing = (now - processStart) / (1000 * 60 * 60);
@@ -177,7 +193,6 @@ async function syncOrdersWithNCM() {
   }
 }
 
-// Automatic 10-Minute Cron Run
 setInterval(syncOrdersWithNCM, 10 * 60 * 1000);
 
 // --- INVENTORY API ---
@@ -259,7 +274,7 @@ app.get('/api/analytics', verifyAuth, async (req, res) => {
   }
 });
 
-// --- ORDERS & LIVE DETAILS ---
+// --- ORDERS API ---
 app.get('/api/branches', verifyAuth, async (req, res) => {
   try {
     const response = await axios.get('https://portal.nepalcanmove.com/api/v2/branches', {
@@ -506,6 +521,7 @@ app.post('/api/orders', verifyAuth, async (req, res) => {
   }
 });
 
+// STATUS UPDATE & NCM DISPATCH TRIGGER
 app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
   const { status } = req.body;
   const orderId = req.params.id;
@@ -516,6 +532,7 @@ app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
 
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
+    // Transition to 'packed' -> Fire NCM creation API
     if (status === 'packed' && !order.tracking_id) {
       const shortTimestamp = Date.now().toString().slice(-6);
       const vref = `Z${shortTimestamp}`;
@@ -544,8 +561,10 @@ app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
 
       if (ncmResponse.status === 200 || ncmResponse.status === 201) {
         const ncmOrderId = ncmResponse.data.orderid || ncmResponse.data.order_id || 'NCM-CREATED';
+        
+        // Save status as packed explicitly (NO automatic processing timestamp set yet)
         await pool.query(
-          "UPDATE orders SET tracking_id = $1, vref_id = $2, status = 'packed', status_updated_at = CURRENT_TIMESTAMP WHERE id = $3",
+          "UPDATE orders SET tracking_id = $1, vref_id = $2, status = 'packed', status_updated_at = CURRENT_TIMESTAMP, processing_started_at = NULL WHERE id = $3",
           [String(ncmOrderId), vref, orderId]
         );
         return res.json({ success: true, tracking_id: ncmOrderId, vref_id: vref, new_status: 'packed' });
