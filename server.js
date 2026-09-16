@@ -11,17 +11,20 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// HTTP Security Headers
 app.use(helmet({ contentSecurityPolicy: false }));
 
+// Rate Limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
-  message: { error: 'Too many requests. Please wait.' }
+  message: { error: 'Too many requests. Please wait a few minutes.' }
 });
 app.use('/api/', apiLimiter);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Environment Variables & Fallbacks
 const NCM_TOKEN = process.env.NCM_TOKEN || '6f33ba16bc5faf0902cc53ed920e78b75906b555';
 const NCM_FROM_BRANCH = 'KALANKI';
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://pnecdxsqaevyvsnibdcu.supabase.co";
@@ -34,6 +37,20 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// Helper Function: Phone Sanitization
+function sanitizePhone(phone) {
+  if (!phone) return '';
+  return String(phone).replace(/\D/g, '').trim();
+}
+
+// Helper Function: String Sanitization
+function sanitizeText(text) {
+  if (text === null || text === undefined) return null;
+  const str = String(text).trim();
+  return str.length > 0 ? str : null;
+}
+
+// Database Migration & Schema Initialization
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -78,18 +95,22 @@ pool.query(`
       CREATE POLICY "Deny Public Inventory" ON inventory FOR ALL USING (false);
     END IF;
   END $$;
-`).catch(err => console.error('Database setup error:', err));
+`).catch(err => console.error('Database security initialization error:', err));
 
+// JWT Middleware
 const verifyAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: Missing token' });
   }
+
   const token = authHeader.split(' ')[1];
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
   if (error || !user) {
     return res.status(403).json({ error: 'Forbidden: Invalid or expired session token' });
   }
+
   req.user = user;
   next();
 };
@@ -97,13 +118,19 @@ const verifyAuth = async (req, res, next) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 
-// --- CORE NCM BACKGROUND SYNC ENGINE ---
+// --- CONCURRENT BACKGROUND NCM SYNC ENGINE ---
 async function syncOrdersWithNCM() {
   try {
-    const activeOrders = await pool.query("SELECT * FROM orders WHERE tracking_id IS NOT NULL AND status IN ('packed', 'processing')");
+    const activeOrdersRes = await pool.query(
+      "SELECT * FROM orders WHERE tracking_id IS NOT NULL AND status IN ('packed', 'processing')"
+    );
+    const activeOrders = activeOrdersRes.rows;
+    if (activeOrders.length === 0) return;
+
     const now = new Date();
 
-    for (const order of activeOrders.rows) {
+    // Batch process concurrently with Promise.allSettled
+    await Promise.allSettled(activeOrders.map(async (order) => {
       try {
         // 1. Fetch NCM Live Status
         const statusRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/status?id=${order.tracking_id}`, {
@@ -114,15 +141,14 @@ async function syncOrdersWithNCM() {
         let newStatus = order.status;
         let processingTimestamp = order.processing_started_at;
 
-        // Parse ONLY the latest status object from NCM (index 0)
         let latestNcmStatusStr = '';
         if (Array.isArray(statusRes.data) && statusRes.data.length > 0) {
           latestNcmStatusStr = String(statusRes.data[0].status || '').toUpperCase();
-        } else if (typeof statusRes.data === 'object' && statusRes.data.status) {
+        } else if (typeof statusRes.data === 'object' && statusRes.data && statusRes.data.status) {
           latestNcmStatusStr = String(statusRes.data.status).toUpperCase();
         }
 
-        // Map status based STRICTLY on the latest status entry
+        // Map status strictly based on the latest NCM timeline item
         if (latestNcmStatusStr.includes('DELIVERED')) {
           newStatus = 'delivered';
         } else if (
@@ -132,6 +158,7 @@ async function syncOrdersWithNCM() {
           latestNcmStatusStr.includes('OUT FOR DELIVERY')
         ) {
           newStatus = 'processing';
+          // Preserve initial processing timestamp without resetting it on transit updates
           if (!processingTimestamp) {
             processingTimestamp = new Date();
           }
@@ -143,7 +170,7 @@ async function syncOrdersWithNCM() {
           newStatus = 'problem';
         }
 
-        // 2. STRICT 3-DAY TIMEOUT CHECK (ONLY EXECUTES IF IN PROCESSING PHASE WITH A TIMESTAMP)
+        // 2. Strict 72-Hour Escalation Check (Applies ONLY if in processing phase)
         if (newStatus === 'processing' && processingTimestamp) {
           const processStart = new Date(processingTimestamp);
           const hoursInProcessing = (now - processStart) / (1000 * 60 * 60);
@@ -163,39 +190,48 @@ async function syncOrdersWithNCM() {
           }
         }
 
-        // 3. Fetch NCM Comments
-        const commentRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/comment?id=${order.tracking_id}`, {
-          headers: { 'Authorization': `Token ${NCM_TOKEN}` },
-          timeout: 8000
-        });
-
-        let updatedCommentsList = [];
-        if (Array.isArray(commentRes.data)) {
-          commentRes.data.forEach(item => {
-            updatedCommentsList.push({
-              id: item.added_time || Date.now(),
-              text: item.comments,
-              author: item.addedBy || 'NCM Staff',
-              timestamp: item.added_time || new Date().toISOString()
-            });
+        // 3. Fetch NCM Remote Comments & Merge Cleanly
+        let existingComments = Array.isArray(order.comments) ? order.comments : [];
+        try {
+          const commentRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/comment?id=${order.tracking_id}`, {
+            headers: { 'Authorization': `Token ${NCM_TOKEN}` },
+            timeout: 8000
           });
-        }
+
+          if (Array.isArray(commentRes.data)) {
+            commentRes.data.forEach(item => {
+              const textStr = String(item.comments || '').trim();
+              if (textStr) {
+                const exists = existingComments.some(ec => ec.text === textStr);
+                if (!exists) {
+                  existingComments.push({
+                    id: item.added_time || Date.now(),
+                    text: textStr,
+                    author: item.addedBy || 'NCM Staff',
+                    timestamp: item.added_time || new Date().toISOString()
+                  });
+                }
+              }
+            });
+          }
+        } catch (err) {}
 
         await pool.query(
           "UPDATE orders SET status = $1, status_updated_at = CURRENT_TIMESTAMP, processing_started_at = $2, comments = $3 WHERE id = $4",
-          [newStatus, processingTimestamp, JSON.stringify(updatedCommentsList), order.id]
+          [newStatus, processingTimestamp, JSON.stringify(existingComments), order.id]
         );
 
       } catch (err) {}
-    }
+    }));
   } catch (err) {
-    console.error('NCM Sync Error:', err);
+    console.error('NCM Sync Engine Error:', err);
   }
 }
 
+// Run Sync Job Every 10 Minutes
 setInterval(syncOrdersWithNCM, 10 * 60 * 1000);
 
-// --- INVENTORY API ---
+// --- INVENTORY ENDPOINTS ---
 app.get('/api/inventory', verifyAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM inventory ORDER BY product_name ASC');
@@ -206,7 +242,14 @@ app.get('/api/inventory', verifyAuth, async (req, res) => {
 });
 
 app.post('/api/inventory', verifyAuth, async (req, res) => {
-  const { product_name, stock_quantity, sku } = req.body;
+  const product_name = sanitizeText(req.body.product_name);
+  const sku = sanitizeText(req.body.sku) || '';
+  const stock_quantity = parseInt(req.body.stock_quantity) || 0;
+
+  if (!product_name) {
+    return res.status(400).json({ error: 'Product name is required' });
+  }
+
   try {
     const result = await pool.query(
       `INSERT INTO inventory (product_name, stock_quantity, sku)
@@ -214,7 +257,7 @@ app.post('/api/inventory', verifyAuth, async (req, res) => {
        ON CONFLICT (product_name) 
        DO UPDATE SET stock_quantity = EXCLUDED.stock_quantity, sku = EXCLUDED.sku
        RETURNING *`,
-      [product_name, parseInt(stock_quantity) || 0, sku || '']
+      [product_name, stock_quantity, sku]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -223,11 +266,11 @@ app.post('/api/inventory', verifyAuth, async (req, res) => {
 });
 
 app.patch('/api/inventory/:id/stock', verifyAuth, async (req, res) => {
-  const { adjustment } = req.body;
+  const adjustment = parseInt(req.body.adjustment) || 0;
   try {
     const result = await pool.query(
       'UPDATE inventory SET stock_quantity = GREATEST(0, stock_quantity + $1) WHERE id = $2 RETURNING *',
-      [parseInt(adjustment), req.params.id]
+      [adjustment, req.params.id]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -244,7 +287,7 @@ app.delete('/api/inventory/:id', verifyAuth, async (req, res) => {
   }
 });
 
-// --- ANALYTICS ---
+// --- ANALYTICS ENDPOINT ---
 app.get('/api/analytics', verifyAuth, async (req, res) => {
   try {
     const totalOrdersRes = await pool.query('SELECT COUNT(*) FROM orders');
@@ -270,11 +313,11 @@ app.get('/api/analytics', verifyAuth, async (req, res) => {
       topBranches: branchBreakdownRes.rows
     });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to calculate metrics' });
+    res.status(500).json({ error: 'Failed to calculate analytics metrics' });
   }
 });
 
-// --- ORDERS API ---
+// --- ORDERS ENDPOINTS ---
 app.get('/api/branches', verifyAuth, async (req, res) => {
   try {
     const response = await axios.get('https://portal.nepalcanmove.com/api/v2/branches', {
@@ -304,6 +347,7 @@ app.get('/api/orders/:id', verifyAuth, async (req, res) => {
     
     const order = result.rows[0];
 
+    // Fetch live NCM comments directly on modal open
     if (order.tracking_id) {
       try {
         const commentRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/comment?id=${order.tracking_id}`, {
@@ -312,18 +356,24 @@ app.get('/api/orders/:id', verifyAuth, async (req, res) => {
         });
 
         if (Array.isArray(commentRes.data)) {
-          let ncmCommentsParsed = [];
+          let existingComments = Array.isArray(order.comments) ? order.comments : [];
           commentRes.data.forEach(item => {
-            ncmCommentsParsed.push({
-              id: item.added_time || Date.now(),
-              text: item.comments,
-              author: item.addedBy || 'NCM Staff',
-              timestamp: item.added_time || new Date().toISOString()
-            });
+            const textStr = String(item.comments || '').trim();
+            if (textStr) {
+              const exists = existingComments.some(ec => ec.text === textStr);
+              if (!exists) {
+                existingComments.push({
+                  id: item.added_time || Date.now(),
+                  text: textStr,
+                  author: item.addedBy || 'NCM Staff',
+                  timestamp: item.added_time || new Date().toISOString()
+                });
+              }
+            }
           });
 
-          await pool.query('UPDATE orders SET comments = $1 WHERE id = $2', [JSON.stringify(ncmCommentsParsed), order.id]);
-          order.comments = ncmCommentsParsed;
+          await pool.query('UPDATE orders SET comments = $1 WHERE id = $2', [JSON.stringify(existingComments), order.id]);
+          order.comments = existingComments;
         }
       } catch (err) {}
     }
@@ -334,9 +384,169 @@ app.get('/api/orders/:id', verifyAuth, async (req, res) => {
   }
 });
 
+// CREATE ORDER WITH ATOMIC STOCK TRANSACTIONS
+app.post('/api/orders', verifyAuth, async (req, res) => {
+  const customer_name = sanitizeText(req.body.customer_name);
+  const phone_number = sanitizePhone(req.body.phone_number);
+  const phone2 = sanitizePhone(req.body.phone2) || null;
+  const shipping_address = sanitizeText(req.body.shipping_address);
+  const cod_amount = sanitizeText(req.body.cod_amount) || '0';
+  const to_branch = sanitizeText(req.body.to_branch) || 'KALANKI';
+  const instruction = sanitizeText(req.body.instruction) || null;
+  const delivery_type = sanitizeText(req.body.delivery_type) || 'Door2Door';
+  const items = req.body.items;
+
+  if (!customer_name || !phone_number || !shipping_address) {
+    return res.status(400).json({ error: 'Missing required order fields' });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    let packageSummaryParts = [];
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        const product_name = sanitizeText(item.product_name);
+        const requestedQty = parseInt(item.qty) || 1;
+
+        if (product_name) {
+          const stockCheck = await client.query('SELECT stock_quantity FROM inventory WHERE product_name = $1', [product_name]);
+
+          if (stockCheck.rows.length > 0) {
+            const currentStock = stockCheck.rows[0].stock_quantity;
+            if (currentStock < requestedQty) {
+              throw new Error(`Insufficient stock for "${product_name}". Available: ${currentStock}, Requested: ${requestedQty}`);
+            }
+
+            // Atomic Stock Deduction
+            await client.query(
+              'UPDATE inventory SET stock_quantity = GREATEST(0, stock_quantity - $1) WHERE product_name = $2',
+              [requestedQty, product_name]
+            );
+          }
+          packageSummaryParts.push(`${requestedQty}x ${product_name}`);
+        }
+      }
+    }
+
+    const finalPackageName = packageSummaryParts.length > 0 ? packageSummaryParts.join(', ') : 'Zenzi Item';
+
+    const result = await client.query(
+      `INSERT INTO orders 
+       (customer_name, phone_number, phone2, shipping_address, package_name, cod_amount, to_branch, instruction, delivery_type, status, comments, status_updated_at, processing_started_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, '[]'::jsonb, CURRENT_TIMESTAMP, NULL) RETURNING id`,
+      [
+        customer_name, phone_number, phone2, shipping_address, 
+        finalPackageName, cod_amount, to_branch, 
+        instruction, delivery_type, 'received'
+      ]
+    );
+
+    await client.query('COMMIT');
+    res.json({ id: result.rows[0].id, package_name: finalPackageName });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(400).json({ error: err.message || 'Database order creation failed' });
+  } finally {
+    client.release();
+  }
+});
+
+// EDIT ORDER (RESTRICTED TO 'received' STATUS ONLY)
+app.put('/api/orders/:id', verifyAuth, async (req, res) => {
+  const customer_name = sanitizeText(req.body.customer_name);
+  const phone_number = sanitizePhone(req.body.phone_number);
+  const phone2 = sanitizePhone(req.body.phone2) || null;
+  const shipping_address = sanitizeText(req.body.shipping_address);
+  const cod_amount = sanitizeText(req.body.cod_amount) || '0';
+  const to_branch = sanitizeText(req.body.to_branch) || 'KALANKI';
+  const instruction = sanitizeText(req.body.instruction) || null;
+  const delivery_type = sanitizeText(req.body.delivery_type) || 'Door2Door';
+  const items = req.body.items;
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const currentOrderRes = await client.query('SELECT status, package_name FROM orders WHERE id = $1', [req.params.id]);
+    if (currentOrderRes.rows.length === 0) throw new Error('Order not found');
+
+    const currentOrder = currentOrderRes.rows[0];
+    if (currentOrder.status !== 'received') {
+      throw new Error('Order cannot be edited once it has passed "Received" status');
+    }
+
+    // 1. Restore previous stock items atomically
+    if (currentOrder.package_name) {
+      const prevItems = currentOrder.package_name.split(',').map(i => i.trim());
+      for (const itemStr of prevItems) {
+        const match = itemStr.match(/^(\d+)x\s+(.+)$/);
+        if (match) {
+          await client.query(
+            'UPDATE inventory SET stock_quantity = stock_quantity + $1 WHERE product_name = $2',
+            [parseInt(match[1]) || 1, match[2].trim()]
+          );
+        }
+      }
+    }
+
+    // 2. Validate & deduct new items atomically
+    let packageSummaryParts = [];
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        const product_name = sanitizeText(item.product_name);
+        const requestedQty = parseInt(item.qty) || 1;
+
+        if (product_name) {
+          const stockCheck = await client.query('SELECT stock_quantity FROM inventory WHERE product_name = $1', [product_name]);
+
+          if (stockCheck.rows.length > 0) {
+            const currentStock = stockCheck.rows[0].stock_quantity;
+            if (currentStock < requestedQty) {
+              throw new Error(`Insufficient stock for "${product_name}". Available: ${currentStock}, Requested: ${requestedQty}`);
+            }
+
+            await client.query(
+              'UPDATE inventory SET stock_quantity = GREATEST(0, stock_quantity - $1) WHERE product_name = $2',
+              [requestedQty, product_name]
+            );
+          }
+          packageSummaryParts.push(`${requestedQty}x ${product_name}`);
+        }
+      }
+    }
+
+    const finalPackageName = packageSummaryParts.length > 0 ? packageSummaryParts.join(', ') : 'Zenzi Item';
+
+    await client.query(
+      `UPDATE orders 
+       SET customer_name = $1, phone_number = $2, phone2 = $3, shipping_address = $4, 
+           package_name = $5, cod_amount = $6, to_branch = $7, instruction = $8, delivery_type = $9
+       WHERE id = $10`,
+      [
+        customer_name, phone_number, phone2, shipping_address, 
+        finalPackageName, cod_amount, to_branch, 
+        instruction, delivery_type, req.params.id
+      ]
+    );
+
+    await client.query('COMMIT');
+    res.json({ success: true, package_name: finalPackageName });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(400).json({ error: err.message || 'Failed to edit order' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST COMMENTS TO NCM API
 app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
-  const { text } = req.body;
-  if (!text || !text.trim()) return res.status(400).json({ error: 'Comment text is required' });
+  const text = sanitizeText(req.body.text);
+  if (!text) return res.status(400).json({ error: 'Comment text is required' });
 
   try {
     const orderRes = await pool.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
@@ -348,7 +558,7 @@ app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
       try {
         const ncmRes = await axios.post('https://portal.nepalcanmove.com/api/v1/comment', {
           orderid: String(order.tracking_id),
-          comments: text.trim()
+          comments: text
         }, {
           headers: { 
             'Authorization': `Token ${NCM_TOKEN}`, 
@@ -367,7 +577,7 @@ app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
 
     const commentObj = {
       id: Date.now(),
-      text: text.trim(),
+      text: text,
       author: 'Vendor (Zenzi)',
       timestamp: new Date().toISOString()
     };
@@ -385,145 +595,9 @@ app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
   }
 });
 
-app.put('/api/orders/:id', verifyAuth, async (req, res) => {
-  const { 
-    customer_name, phone_number, phone2, shipping_address, 
-    items, cod_amount, to_branch, instruction, delivery_type 
-  } = req.body;
-
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN');
-
-    const currentOrderRes = await client.query('SELECT status, package_name FROM orders WHERE id = $1', [req.params.id]);
-    if (currentOrderRes.rows.length === 0) throw new Error('Order not found');
-
-    const currentOrder = currentOrderRes.rows[0];
-    if (currentOrder.status !== 'received') {
-      throw new Error('Order cannot be edited once it has passed "Received" status');
-    }
-
-    if (currentOrder.package_name) {
-      const prevItems = currentOrder.package_name.split(',').map(i => i.trim());
-      for (const itemStr of prevItems) {
-        const match = itemStr.match(/^(\d+)x\s+(.+)$/);
-        if (match) {
-          await client.query(
-            'UPDATE inventory SET stock_quantity = stock_quantity + $1 WHERE product_name = $2',
-            [parseInt(match[1]) || 1, match[2].trim()]
-          );
-        }
-      }
-    }
-
-    let packageSummaryParts = [];
-    if (Array.isArray(items) && items.length > 0) {
-      for (const item of items) {
-        const { product_name, qty } = item;
-        const requestedQty = parseInt(qty) || 1;
-
-        const stockCheck = await client.query('SELECT stock_quantity FROM inventory WHERE product_name = $1', [product_name]);
-
-        if (stockCheck.rows.length > 0) {
-          const currentStock = stockCheck.rows[0].stock_quantity;
-          if (currentStock < requestedQty) {
-            throw new Error(`Insufficient stock for "${product_name}". Available: ${currentStock}, Requested: ${requestedQty}`);
-          }
-
-          await client.query(
-            'UPDATE inventory SET stock_quantity = stock_quantity - $1 WHERE product_name = $2',
-            [requestedQty, product_name]
-          );
-        }
-        packageSummaryParts.push(`${requestedQty}x ${product_name}`);
-      }
-    }
-
-    const finalPackageName = packageSummaryParts.length > 0 ? packageSummaryParts.join(', ') : 'Zenzi Item';
-
-    await client.query(
-      `UPDATE orders 
-       SET customer_name = $1, phone_number = $2, phone2 = $3, shipping_address = $4, 
-           package_name = $5, cod_amount = $6, to_branch = $7, instruction = $8, delivery_type = $9
-       WHERE id = $10`,
-      [
-        customer_name, phone_number, phone2 || null, shipping_address, 
-        finalPackageName, cod_amount || '0', to_branch || 'KALANKI', 
-        instruction || null, delivery_type || 'Door2Door', req.params.id
-      ]
-    );
-
-    await client.query('COMMIT');
-    res.json({ success: true, package_name: finalPackageName });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(400).json({ error: err.message || 'Failed to edit order' });
-  } finally {
-    client.release();
-  }
-});
-
-app.post('/api/orders', verifyAuth, async (req, res) => {
-  const { 
-    customer_name, phone_number, phone2, shipping_address, 
-    items, cod_amount, to_branch, instruction, delivery_type 
-  } = req.body;
-
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN');
-
-    let packageSummaryParts = [];
-    if (Array.isArray(items) && items.length > 0) {
-      for (const item of items) {
-        const { product_name, qty } = item;
-        const requestedQty = parseInt(qty) || 1;
-
-        const stockCheck = await client.query('SELECT stock_quantity FROM inventory WHERE product_name = $1', [product_name]);
-
-        if (stockCheck.rows.length > 0) {
-          const currentStock = stockCheck.rows[0].stock_quantity;
-          if (currentStock < requestedQty) {
-            throw new Error(`Insufficient stock for "${product_name}". Available: ${currentStock}, Requested: ${requestedQty}`);
-          }
-
-          await client.query(
-            'UPDATE inventory SET stock_quantity = stock_quantity - $1 WHERE product_name = $2',
-            [requestedQty, product_name]
-          );
-        }
-        packageSummaryParts.push(`${requestedQty}x ${product_name}`);
-      }
-    }
-
-    const finalPackageName = packageSummaryParts.length > 0 ? packageSummaryParts.join(', ') : 'Zenzi Item';
-
-    const result = await client.query(
-      `INSERT INTO orders 
-       (customer_name, phone_number, phone2, shipping_address, package_name, cod_amount, to_branch, instruction, delivery_type, status, comments, status_updated_at, processing_started_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, '[]'::jsonb, CURRENT_TIMESTAMP, NULL) RETURNING id`,
-      [
-        customer_name, phone_number, phone2 || null, shipping_address, 
-        finalPackageName, cod_amount || '0', to_branch || 'KALANKI', 
-        instruction || null, delivery_type || 'Door2Door', 'received'
-      ]
-    );
-
-    await client.query('COMMIT');
-    res.json({ id: result.rows[0].id, package_name: finalPackageName });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(400).json({ error: err.message || 'Database order creation failed' });
-  } finally {
-    client.release();
-  }
-});
-
-// STATUS UPDATE & NCM DISPATCH TRIGGER
+// STATUS UPDATE & NCM DISPATCH TRIGGER WITH SANITIZED SANITY CHECKS
 app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
-  const { status } = req.body;
+  const status = sanitizeText(req.body.status);
   const orderId = req.params.id;
 
   try {
@@ -532,26 +606,29 @@ app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
 
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    // Transition to 'packed' -> Fire NCM creation API
     if (status === 'packed' && !order.tracking_id) {
       const shortTimestamp = Date.now().toString().slice(-6);
       const vref = `Z${shortTimestamp}`;
 
+      // Strictly sanitize phone payload right before building Axios JSON
+      const cleanPhone = sanitizePhone(order.phone_number);
+      const cleanPhone2 = sanitizePhone(order.phone2);
+
       const ncmPayload = {
-        name: order.customer_name,
-        phone: order.phone_number,
-        cod_charge: String(order.cod_amount || '0'),
-        address: order.shipping_address,
+        name: sanitizeText(order.customer_name),
+        phone: cleanPhone,
+        cod_charge: String(order.cod_amount || '0').trim(),
+        address: sanitizeText(order.shipping_address),
         fbranch: NCM_FROM_BRANCH,
-        branch: order.to_branch || 'KALANKI',
-        package: order.package_name || 'Zenzi Product',
+        branch: sanitizeText(order.to_branch) || 'KALANKI',
+        package: sanitizeText(order.package_name) || 'Zenzi Product',
         vref_id: vref,
-        delivery_type: order.delivery_type || 'Door2Door',
+        delivery_type: sanitizeText(order.delivery_type) || 'Door2Door',
         weight: '1'
       };
 
-      if (order.phone2) ncmPayload.phone2 = order.phone2;
-      if (order.instruction) ncmPayload.instruction = order.instruction;
+      if (cleanPhone2) ncmPayload.phone2 = cleanPhone2;
+      if (order.instruction) ncmPayload.instruction = sanitizeText(order.instruction);
 
       const ncmResponse = await axios.post(
         'https://portal.nepalcanmove.com/api/v1/order/create',
@@ -561,8 +638,6 @@ app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
 
       if (ncmResponse.status === 200 || ncmResponse.status === 201) {
         const ncmOrderId = ncmResponse.data.orderid || ncmResponse.data.order_id || 'NCM-CREATED';
-        
-        // Save status as packed explicitly (NO automatic processing timestamp set yet)
         await pool.query(
           "UPDATE orders SET tracking_id = $1, vref_id = $2, status = 'packed', status_updated_at = CURRENT_TIMESTAMP, processing_started_at = NULL WHERE id = $3",
           [String(ncmOrderId), vref, orderId]

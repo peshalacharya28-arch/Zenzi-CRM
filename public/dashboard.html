@@ -318,8 +318,6 @@
         <datalist id="branchList"></datalist>
         <select id="deliveryType" class="full-width">
           <option value="Door2Door" selected>Door2Door Delivery</option>
-          <option value="Door2Branch" selected>Door2Branch</option>
-          <option value="Branch2Door" selected>Branch2Door</option>
           <option value="Branch2Branch">Branch2Branch Pickup</option>
         </select>
         <input type="text" id="address" class="full-width" placeholder="Full Delivery Address *" required>
@@ -436,7 +434,8 @@
           <span class="ncm-badge" id="detail-status-badge">ACTIVE</span>
           <div style="font-size: 12px; margin-top: 6px; opacity: 0.8;" id="detail-route-time">KALANKI → NEWROAD</div>
         </div>
-        <div>
+        <div style="display: flex; gap: 8px;">
+          <a id="ncm-native-link" href="https://portal.nepalcanmove.com/" target="_blank" class="btn-action" style="font-size: 12px; padding: 6px 12px; min-height: unset; text-decoration: none; background: #334155; color: #fff;">Native Portal ↗</a>
           <button class="btn-action btn-primary" style="font-size: 12px; padding: 6px 12px; min-height: unset;" onclick="closeDetailModal()">Back to Directory</button>
         </div>
       </div>
@@ -512,7 +511,6 @@
 
     let currentAccessToken = "";
     let activeOrderDetailId = null;
-    let autoSyncInterval = null;
 
     function showToast(message, type = 'success') {
       const container = document.getElementById('toast-container');
@@ -666,28 +664,7 @@
       document.getElementById('detail-vref').innerText = order.vref_id || '-';
       document.getElementById('detail-to-branch').innerText = order.to_branch || 'KALANKI';
 
-      let combinedComments = order.comments || [];
-      if (order.ncm_remote_comments) {
-        if (Array.isArray(order.ncm_remote_comments)) {
-          order.ncm_remote_comments.forEach(ncmC => {
-            combinedComments.push({
-              id: Date.now(),
-              author: 'NCM Rider/Agent',
-              text: typeof ncmC === 'string' ? ncmC : (ncmC.comment || ncmC.text || JSON.stringify(ncmC)),
-              timestamp: new Date().toISOString()
-            });
-          });
-        } else {
-          combinedComments.push({
-            id: Date.now(),
-            author: 'NCM Rider/Agent',
-            text: String(order.ncm_remote_comments),
-            timestamp: new Date().toISOString()
-          });
-        }
-      }
-
-      renderComments(combinedComments);
+      renderComments(order.comments || []);
       document.getElementById('detailModal').classList.add('active');
     }
 
@@ -743,7 +720,7 @@
 
       if (res.ok) {
         const updatedOrder = await res.json();
-        showToast(updatedOrder.ncm_synced ? "Comment posted & synced to NCM!" : "Comment saved locally!");
+        showToast(updatedOrder.ncm_pushed ? "Comment posted & pushed to NCM!" : "Comment saved locally!");
         document.getElementById('newCommentText').value = '';
         toggleCommentInput();
         renderComments(updatedOrder.comments || []);
@@ -761,18 +738,10 @@
         loadBranches();
         fetchInventory();
         fetchOrders();
-
-        // RUN LIVE BACKGROUND SYNC EVERY 15 SECONDS
-        autoSyncInterval = setInterval(async () => {
-          await authFetch('/api/orders/sync', { method: 'POST' });
-          fetchOrders(true);
-          fetchInventory(true);
-        }, 15000);
       }
     }).catch(() => { window.location.href = '/index.html'; });
 
     async function logout() {
-      if (autoSyncInterval) clearInterval(autoSyncInterval);
       try { await dbClient.auth.signOut(); } catch (err) {}
       finally {
         sessionStorage.clear();
@@ -781,7 +750,7 @@
       }
     }
 
-    async function fetchInventory(silent = false) {
+    async function fetchInventory() {
       try {
         const res = await authFetch('/api/inventory');
         inventoryList = await res.json();
@@ -933,7 +902,7 @@
       } catch (err) {}
     }
 
-    async function fetchOrders(silent = false) {
+    async function fetchOrders() {
       const res = await authFetch('/api/orders');
       allOrders = await res.json();
       updateMetrics();
