@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const { Pool } = require('pg');
 const axios = require('axios');
@@ -34,7 +36,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
 // Helper Function: Phone Sanitization
@@ -131,10 +133,8 @@ async function syncOrdersWithNCM() {
 
     const now = new Date();
 
-    // Batch process concurrently with Promise.allSettled
     await Promise.allSettled(activeOrders.map(async (order) => {
       try {
-        // 1. Fetch NCM Live Status
         const statusRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/status?id=${order.tracking_id}`, {
           headers: { 'Authorization': `Token ${NCM_TOKEN}` },
           timeout: 8000
@@ -150,7 +150,6 @@ async function syncOrdersWithNCM() {
           latestNcmStatusStr = String(statusRes.data.status).toUpperCase();
         }
 
-        // Map status strictly based on the latest NCM timeline item
         if (latestNcmStatusStr.includes('DELIVERED')) {
           newStatus = 'delivered';
         } else if (
@@ -160,7 +159,6 @@ async function syncOrdersWithNCM() {
           latestNcmStatusStr.includes('OUT FOR DELIVERY')
         ) {
           newStatus = 'processing';
-          // Preserve initial processing timestamp without resetting it on transit updates
           if (!processingTimestamp) {
             processingTimestamp = new Date();
           }
@@ -172,7 +170,6 @@ async function syncOrdersWithNCM() {
           newStatus = 'problem';
         }
 
-        // 2. Strict 72-Hour Escalation Check (Applies ONLY if in processing phase)
         if (newStatus === 'processing' && processingTimestamp) {
           const processStart = new Date(processingTimestamp);
           const hoursInProcessing = (now - processStart) / (1000 * 60 * 60);
@@ -192,7 +189,6 @@ async function syncOrdersWithNCM() {
           }
         }
 
-        // 3. Fetch NCM Remote Comments & Merge Cleanly
         let existingComments = Array.isArray(order.comments) ? order.comments : [];
         try {
           const commentRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/comment?id=${order.tracking_id}`, {
@@ -230,7 +226,6 @@ async function syncOrdersWithNCM() {
   }
 }
 
-// Run Sync Job Every 10 Minutes
 setInterval(syncOrdersWithNCM, 10 * 60 * 1000);
 
 // --- INVENTORY ENDPOINTS ---
@@ -319,7 +314,6 @@ app.get('/api/analytics', verifyAuth, async (req, res) => {
   }
 });
 
-// Full-Page Dynamic Analytics & Growth Endpoint
 app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
   const { startDate, endDate } = req.query;
 
@@ -331,7 +325,6 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
   const endISO = end.toISOString();
 
   try {
-    // 1. Total Volume & Status Aggregates
     const volumeRes = await pool.query(
       `SELECT 
          COUNT(*) as total_orders,
@@ -355,7 +348,6 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     const rtoRate = totalOrders > 0 ? ((rtoOrders / totalOrders) * 100).toFixed(1) : "0.0";
     const bottleneckRate = totalOrders > 0 ? ((problemStalledOrders / totalOrders) * 100).toFixed(1) : "0.0";
 
-    // 2. Average Transit Lead Time
     const leadTimeRes = await pool.query(
       `SELECT 
          COALESCE(AVG(EXTRACT(EPOCH FROM (status_updated_at - COALESCE(processing_started_at, created_at))) / 3600), 0) as avg_transit_hours
@@ -365,7 +357,6 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     );
     const avgTransitHours = parseFloat(leadTimeRes.rows[0].avg_transit_hours || 0).toFixed(1);
 
-    // 3. Top Destination Branches Breakdown
     const branchRes = await pool.query(
       `SELECT to_branch, COUNT(*) as order_count 
        FROM orders 
@@ -376,7 +367,6 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
       [startISO, endISO]
     );
 
-    // 4. Product Sales Velocity
     const periodOrdersRes = await pool.query(
       `SELECT package_name FROM orders WHERE created_at BETWEEN $1 AND $2 AND package_name IS NOT NULL`,
       [startISO, endISO]
@@ -502,7 +492,6 @@ app.get('/api/orders/:id', verifyAuth, async (req, res) => {
   }
 });
 
-// CREATE ORDER WITH ATOMIC STOCK TRANSACTIONS
 app.post('/api/orders', verifyAuth, async (req, res) => {
   const customer_name = sanitizeText(req.body.customer_name);
   const phone_number = sanitizePhone(req.body.phone_number);
@@ -571,7 +560,6 @@ app.post('/api/orders', verifyAuth, async (req, res) => {
   }
 });
 
-// EDIT ORDER (RESTRICTED TO 'received' STATUS ONLY)
 app.put('/api/orders/:id', verifyAuth, async (req, res) => {
   const customer_name = sanitizeText(req.body.customer_name);
   const phone_number = sanitizePhone(req.body.phone_number);
@@ -658,7 +646,6 @@ app.put('/api/orders/:id', verifyAuth, async (req, res) => {
   }
 });
 
-// POST COMMENTS TO NCM API
 app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
   const text = sanitizeText(req.body.text);
   if (!text) return res.status(400).json({ error: 'Comment text is required' });
@@ -710,7 +697,6 @@ app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
   }
 });
 
-// STATUS UPDATE & NCM DISPATCH TRIGGER WITH SANITIZED SANITY CHECKS
 app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
   const status = sanitizeText(req.body.status);
   const orderId = req.params.id;
