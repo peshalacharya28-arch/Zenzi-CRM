@@ -119,7 +119,7 @@ async function syncOrdersWithNCM() {
           newStatus = 'delivered';
         } else if (statusText.includes('DISPATCH') || statusText.includes('TRANSIT') || statusText.includes('SENT FOR DELIVERY')) {
           newStatus = 'processing';
-          // Set processing start time if entering processing phase for the first time
+          // Record the exact time when it enters processing for the first time
           if (!processingTimestamp) {
             processingTimestamp = new Date();
           }
@@ -127,7 +127,7 @@ async function syncOrdersWithNCM() {
           newStatus = 'problem';
         }
 
-        // 2. Strict 72h Timeout Check (APPLIES ONLY AFTER ENTERING PROCESSING PHASE)
+        // 2. STRICT 3-DAY TIMEOUT CHECK (ONLY EXECUTES IF ALREADY IN PROCESSING PHASE)
         if (newStatus === 'processing' && processingTimestamp) {
           const processStart = new Date(processingTimestamp);
           const hoursInProcessing = (now - processStart) / (1000 * 60 * 60);
@@ -487,8 +487,8 @@ app.post('/api/orders', verifyAuth, async (req, res) => {
 
     const result = await client.query(
       `INSERT INTO orders 
-       (customer_name, phone_number, phone2, shipping_address, package_name, cod_amount, to_branch, instruction, delivery_type, status, comments, status_updated_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, '[]'::jsonb, CURRENT_TIMESTAMP) RETURNING id`,
+       (customer_name, phone_number, phone2, shipping_address, package_name, cod_amount, to_branch, instruction, delivery_type, status, comments, status_updated_at, processing_started_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, '[]'::jsonb, CURRENT_TIMESTAMP, NULL) RETURNING id`,
       [
         customer_name, phone_number, phone2 || null, shipping_address, 
         finalPackageName, cod_amount || '0', to_branch || 'KALANKI', 
