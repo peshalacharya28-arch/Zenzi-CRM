@@ -217,7 +217,8 @@
       <div class="header-actions">
         <button class="btn-action btn-primary" onclick="openOrderModal()">+ Add Order</button>
         <button class="btn-action" onclick="openInventoryModal()">📦 Inventory & Stock</button>
-        <button class="btn-action" onclick="openAnalyticsModal()">📊 Analytics</button>
+        <!-- NAVIGATES TO FULL-PAGE ANALYTICS -->
+        <button class="btn-action" onclick="window.location.href='/analytics'">📊 Analytics</button>
         <button class="btn-action" onclick="logout()">Logout</button>
       </div>
     </div>
@@ -366,56 +367,6 @@
       </div>
       <div style="margin-top: 16px; text-align: right;">
         <button class="btn-action" onclick="closeInventoryModal()">Escape / Close</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ANALYTICS MODAL -->
-  <div class="modal-overlay" id="analyticsModal" onclick="closeOnBackdropClick(event, 'analyticsModal')">
-    <div class="modal-content" style="max-width: 750px;" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h3 style="margin: 0; font-size: 18px;">Growth & Operations Analytics</h3>
-        <button class="close-btn" onclick="closeAnalyticsModal()">&times;</button>
-      </div>
-
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px;">
-        <div class="metric-card">
-          <div>
-            <div class="metric-title">Today's Orders</div>
-            <div class="metric-value" id="growth-today">0</div>
-          </div>
-        </div>
-        <div class="metric-card">
-          <div>
-            <div class="metric-title">Total COD Generated</div>
-            <div class="metric-value" id="growth-revenue" style="font-size: 18px; margin-top:8px;">NPR 0</div>
-          </div>
-        </div>
-        <div class="metric-card">
-          <div>
-            <div class="metric-title">Delivery Rate</div>
-            <div class="metric-value" id="growth-rate">0%</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="table-card" style="padding: 12px;">
-        <div class="section-label" style="margin-bottom: 8px;">Top Destination Branches</div>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Branch Name</th>
-                <th>Orders Handled</th>
-              </tr>
-            </thead>
-            <tbody id="branchBreakdownBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div style="margin-top: 16px; text-align: right;">
-        <button class="btn-action" onclick="closeAnalyticsModal()">Escape / Close</button>
       </div>
     </div>
   </div>
@@ -570,7 +521,6 @@
       if (e.key === 'Escape') {
         closeOrderModal();
         closeInventoryModal();
-        closeAnalyticsModal();
         closeDetailModal();
       }
     });
@@ -629,14 +579,6 @@
     }
     function closeInventoryModal() {
       document.getElementById('inventoryModal').classList.remove('active');
-    }
-
-    function openAnalyticsModal() {
-      fetchAnalytics();
-      document.getElementById('analyticsModal').classList.add('active');
-    }
-    function closeAnalyticsModal() {
-      document.getElementById('analyticsModal').classList.remove('active');
     }
 
     async function openDetailModal(orderId) {
@@ -838,33 +780,6 @@
       await authFetch(`/api/inventory/${id}`, { method: 'DELETE' });
       showToast("Product deleted from inventory");
       await fetchInventory();
-    }
-
-    async function fetchAnalytics() {
-      try {
-        const res = await authFetch('/api/analytics');
-        const data = await res.json();
-
-        document.getElementById('growth-today').innerText = data.todayOrders;
-        document.getElementById('growth-revenue').innerText = `NPR ${data.totalRevenue.toLocaleString()}`;
-        document.getElementById('growth-rate').innerText = data.conversionRate;
-
-        const branchTbody = document.getElementById('branchBreakdownBody');
-        branchTbody.innerHTML = '';
-        if (data.topBranches.length === 0) {
-          branchTbody.innerHTML = `<tr><td colspan="2" style="text-align:center;">No branch data recorded yet.</td></tr>`;
-          return;
-        }
-
-        data.topBranches.forEach(b => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td><strong>${b.to_branch || 'KALANKI'}</strong></td>
-            <td>${b.count} orders</td>
-          `;
-          branchTbody.appendChild(tr);
-        });
-      } catch (err) {}
     }
 
     function addProductRow(selectedProd = '', qty = 1) {
