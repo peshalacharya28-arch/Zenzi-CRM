@@ -316,8 +316,7 @@
       const seconds = isEnd ? '59' : '00';
       return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
-
-    function setPresetTimeframe(preset, btnElement) {
+function setPresetTimeframe(preset, btnElement) {
       document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
       if (btnElement) btnElement.classList.add('active');
 
@@ -342,11 +341,31 @@
         end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
       }
 
-      document.getElementById('startDateInput').value = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
-      document.getElementById('endDateInput').value = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+      document.getElementById('startDateInput').value = start.toISOString().split('T')[0];
+      document.getElementById('endDateInput').value = end.toISOString().split('T')[0];
 
-      activeStartDate = formatLocalDateTime(start, false);
-      activeEndDate = formatLocalDateTime(end, true);
+      activeStartDate = start.toISOString();
+      activeEndDate = end.toISOString();
+
+      loadAnalyticsData();
+    }
+
+    function applyCustomDateRange() {
+      const s = document.getElementById('startDateInput').value;
+      const e = document.getElementById('endDateInput').value;
+
+      if (!s || !e) {
+        showToast("Please select both start and end dates");
+        return;
+      }
+
+      document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+
+      const start = new Date(`${s}T00:00:00`);
+      const end = new Date(`${e}T23:59:59`);
+
+      activeStartDate = start.toISOString();
+      activeEndDate = end.toISOString();
 
       loadAnalyticsData();
     }
@@ -371,8 +390,9 @@
       loadAnalyticsData();
     }
 
-    async function loadAnalyticsData() {
+   async function loadAnalyticsData() {
       try {
+        // Ensure activeStartDate and activeEndDate are properly encoded
         const url = `/api/analytics/overview?startDate=${encodeURIComponent(activeStartDate)}&endDate=${encodeURIComponent(activeEndDate)}`;
         const res = await authFetch(url);
         const data = await res.json();

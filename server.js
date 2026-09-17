@@ -550,18 +550,8 @@ app.get('/api/analytics', verifyAuth, async (req, res) => {
 app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
   const { startDate, endDate } = req.query;
 
-  const now = new Date();
-  const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  const end = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
-  // Safely format dates to SQL-compatible strings (YYYY-MM-DD HH:MM:SS) to prevent query casting errors
-  const formatSqlDate = (d) => {
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  };
-
-  const startStr = formatSqlDate(start);
-  const endStr = formatSqlDate(end);
+  const startISO = startDate ? new Date(startDate).toISOString() : new Date().toISOString();
+  const endISO = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
 
   try {
     const volumeRes = await pool.query(
@@ -572,7 +562,7 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
          COUNT(*) FILTER (WHERE status IN ('problem', 'returned', 'cancelled')) as rto_orders,
          COALESCE(SUM(cod_amount) FILTER (WHERE status = 'delivered'), 0) as total_delivered_revenue
        FROM orders WHERE created_at BETWEEN $1::timestamp AND $2::timestamp`,
-      [startStr, endStr]
+      [startISO, endISO]
     );
 
     const stats = volumeRes.rows[0] || {};
