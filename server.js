@@ -555,9 +555,27 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
   const defaultStart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} 00:00:00`;
   const defaultEnd = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} 23:59:59`;
 
-  // Use the incoming strings directly without UTC conversion shifts
-  const startStr = startDate ? decodeURIComponent(startDate) : defaultStart;
-  const endStr = endDate ? decodeURIComponent(endDate) : defaultEnd;
+  // Safely parse incoming dates whether they are ISO strings or standard date strings
+  const parseDateParam = (val, isEnd) => {
+    if (!val) return isEnd ? defaultEnd : defaultStart;
+    try {
+      const decoded = decodeURIComponent(val);
+      const d = new Date(decoded);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = pad(d.getMonth() + 1);
+        const day = pad(d.getDate());
+        const hh = isEnd ? '23' : '00';
+        const mm = isEnd ? '59' : '00';
+        const ss = isEnd ? '59' : '00';
+        return `${year}-${month}-${day} ${hh}:${mm}:${ss}`;
+      }
+    } catch (e) {}
+    return isEnd ? defaultEnd : defaultStart;
+  };
+
+  const startStr = parseDateParam(startDate, false);
+  const endStr = parseDateParam(endDate, true);
 
   try {
     const volumeRes = await pool.query(
@@ -661,5 +679,6 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to calculate dynamic analytics dataset' });
   }
 });
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Zenzi CRM live on port ${PORT}`));
