@@ -578,14 +578,15 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
   const endStr = parseDateParam(endDate, true);
 
   try {
+    // Replaced FILTER syntax with standard CASE WHEN to prevent postgres driver/version syntax incompatibilities
     const volumeRes = await pool.query(
       `SELECT 
          COUNT(*) as total_orders,
          COALESCE(SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END), 0) as delivered_orders,
          COALESCE(SUM(CASE WHEN status IN ('problem', 'hold') THEN 1 ELSE 0 END), 0) as problem_stalled_orders,
          COALESCE(SUM(CASE WHEN status IN ('problem', 'returned', 'cancelled') THEN 1 ELSE 0 END), 0) as rto_orders,
-         COALESCE(SUM(cod_amount) FILTER (WHERE status = 'delivered'), 0) as total_delivered_revenue
-       FROM orders WHERE created_at BETWEEN $1::timestamp AND $2::timestamp`,
+         COALESCE(SUM(CASE WHEN status = 'delivered' THEN COALESCE(cod_amount, 0) ELSE 0 END), 0) as total_delivered_revenue
+       FROM orders WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp`,
       [startStr, endStr]
     );
 
@@ -604,7 +605,7 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     try {
       const leadTimeRes = await pool.query(
         `SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE(status_updated_at, CURRENT_TIMESTAMP) - COALESCE(processing_started_at, created_at))) / 3600), 0) as avg_transit_hours
-         FROM orders WHERE status = 'delivered' AND created_at BETWEEN $1::timestamp AND $2::timestamp`,
+         FROM orders WHERE status = 'delivered' AND created_at >= $1::timestamp AND created_at <= $2::timestamp`,
         [startStr, endStr]
       );
       avgTransitHours = parseFloat(leadTimeRes.rows[0]?.avg_transit_hours || 0).toFixed(1);
@@ -616,7 +617,7 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     try {
       const branchRes = await pool.query(
         `SELECT to_branch, COUNT(*) as order_count FROM orders 
-         WHERE created_at BETWEEN $1::timestamp AND $2::timestamp 
+         WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp 
          GROUP BY to_branch ORDER BY order_count DESC LIMIT 10`,
         [startStr, endStr]
       );
@@ -628,7 +629,7 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     let periodOrdersRows = [];
     try {
       const periodOrdersRes = await pool.query(
-        `SELECT package_name FROM orders WHERE created_at BETWEEN $1::timestamp AND $2::timestamp AND package_name IS NOT NULL`,
+        `SELECT package_name FROM orders WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp AND package_name IS NOT NULL`,
         [startStr, endStr]
       );
       periodOrdersRows = periodOrdersRes.rows || [];
@@ -676,7 +677,8 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     });
   } catch (err) {
     console.error("ANALYTICS ERROR:", err.message);
-    res.status(500).json({ error: 'Failed to calculate dynamic analytics dataset' });
+    // Expose the exact error detail to help diagnose immediately if anything else fails
+    res.status(500).json({ error: 'Failed to calculate dynamic analytics dataset', details: err.message });
   }
 });
 
