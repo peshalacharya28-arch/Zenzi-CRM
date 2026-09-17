@@ -110,11 +110,12 @@
   </div>
 
   <!-- ORDER MODAL -->
-  <div class="modal-overlay" id="orderModal" onclick="if(event.target===this) this.classList.remove('active')">
+  <div class="modal-overlay" id="orderModal" onclick="if(event.target===this) closeOrderModal()">
     <div class="modal-content">
-      <button class="close-btn" onclick="document.getElementById('orderModal').classList.remove('active')">&times;</button>
-      <h3 style="margin-top:0;">Create New Order</h3>
+      <button class="close-btn" onclick="closeOrderModal()">&times;</button>
+      <h3 style="margin-top:0;" id="orderModalTitle">Create New Order</h3>
       <form id="orderForm" onsubmit="submitOrder(event)" style="display: flex; flex-direction: column; gap: 12px;">
+        <input type="hidden" id="editingOrderId" value="">
         <input type="text" id="name" placeholder="Customer Name *" required>
         <div style="display:flex; gap:8px;">
           <input type="text" id="phone" placeholder="Primary Phone *" required style="flex:1;">
@@ -130,8 +131,13 @@
 
         <div style="display:flex; gap:8px;">
           <input type="number" id="codAmount" placeholder="COD (NPR) *" required style="flex:1;">
-          <input type="text" id="toBranch" placeholder="NCM Branch *" required value="KALANKI" style="flex:1;">
+          <input list="branchList" id="toBranch" placeholder="NCM Branch *" required style="flex:1;" value="KALANKI">
+          <datalist id="branchList"></datalist>
         </div>
+        <select id="deliveryType">
+          <option value="Door2Door" selected>Door2Door Delivery</option>
+          <option value="Branch2Branch">Branch2Branch Pickup</option>
+        </select>
         <input type="text" id="instruction" placeholder="Delivery Instructions">
         
         <button type="submit" id="btnSubmitOrder" class="btn-action btn-primary" style="padding:14px; margin-top:8px;">Save Order & Deduct Stock</button>
@@ -140,7 +146,6 @@
   </div>
 
   <script>
-    // Security: Global HTML Escaper
     function escapeHTML(str) {
       if (!str) return '';
       return String(str).replace(/[&<>'"]/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[match]));
@@ -181,6 +186,7 @@
       if (!session) window.location.href = '/index.html';
       else { 
         currentToken = session.access_token; 
+        loadBranches();
         fetchInventory(); 
         fetchOrders(); 
       }
@@ -210,6 +216,20 @@
       } catch (err) { showToast("Failed to load inventory", true); }
     }
 
+    async function loadBranches() {
+      try {
+        const res = await authFetch('/api/branches');
+        const branches = await res.json();
+        const datalist = document.getElementById('branchList');
+        datalist.innerHTML = '';
+        branches.forEach(b => {
+          const opt = document.createElement('option');
+          opt.value = b;
+          datalist.appendChild(opt);
+        });
+      } catch (err) {}
+    }
+
     function renderTable() {
       const tbody = document.getElementById('ordersTableBody');
       const search = document.getElementById('searchInput').value.toLowerCase();
@@ -217,8 +237,8 @@
       
       allOrders.filter(o => [o.customer_name, o.phone_number, o.tracking_id].join(' ').toLowerCase().includes(search)).forEach(o => {
         const hasTracking = !!o.tracking_id;
+        const canEdit = o.status === 'received';
         
-        // State Machine Enforcement
         const selectHtml = `
           <select onchange="updateStatus(${o.id}, this.value, '${escapeHTML(o.status)}')" style="width:100%; background:var(--accent-badge); font-weight:600;">
             <option value="received" ${o.status==='received'?'selected':''}>Received</option>
@@ -228,6 +248,8 @@
             <option value="problem" ${o.status==='problem'?'selected':''}>Problem</option>
           </select>
         `;
+
+        const editBtnHtml = canEdit ? `<button class="btn-action" style="padding:6px 12px; font-size:12px; min-height:0; margin-right:4px;" onclick="openOrderModal(${o.id})">Edit</button>` : '';
 
         tbody.innerHTML += `
           <tr>
@@ -245,6 +267,7 @@
               <div style="font-size:11px; margin-top:6px; color:var(--text-sub);">ID: ${escapeHTML(o.tracking_id) || 'Not Dispatched'}</div>
             </td>
             <td>
+              ${editBtnHtml}
               <button class="btn-action" style="color:#dc2626; padding:6px 12px; font-size:12px; min-height:0;" onclick="deleteOrder(${o.id})">Delete</button>
             </td>
           </tr>`;
@@ -328,19 +351,63 @@
     }
 
     // -- ORDER LOGIC --
-    function openOrderModal() { 
-      document.getElementById('orderForm').reset();
+    function openOrderModal(editOrderId = null) {
       document.getElementById('productRowsContainer').innerHTML = '';
-      addProductRow();
+      document.getElementById('editingOrderId').value = editOrderId || '';
+
+      if (editOrderId) {
+        document.getElementById('orderModalTitle').innerText = "Edit Order (#" + editOrderId + ")";
+        const order = allOrders.find(o => o.id === editOrderId);
+        if (order) {
+          document.getElementById('name').value = order.customer_name || '';
+          document.getElementById('phone').value = order.phone_number || '';
+          document.getElementById('phone2').value = order.phone2 || '';
+          document.getElementById('address').value = order.shipping_address || '';
+          document.getElementById('codAmount').value = order.cod_amount || '';
+          document.getElementById('toBranch').value = order.to_branch || 'KALANKI';
+          document.getElementById('deliveryType').value = order.delivery_type || 'Door2Door';
+          document.getElementById('instruction').value = order.instruction || '';
+
+          if (Array.isArray(order.items) && order.items.length > 0) {
+            order.items.forEach(item => addProductRow(item.product_name, item.qty));
+          } else if (order.package_name) {
+            const itemsStr = order.package_name.split(',');
+            itemsStr.forEach(str => {
+              const match = str.trim().match(/^(\d+)x\s+(.+)$/);
+              if (match) addProductRow(match[2].trim(), parseInt(match[1]) || 1);
+            });
+          } else {
+            addProductRow();
+          }
+        }
+      } else {
+        document.getElementById('orderModalTitle').innerText = "Create New Order";
+        document.getElementById('orderForm').reset();
+        addProductRow();
+      }
+
       document.getElementById('orderModal').classList.add('active'); 
     }
 
-    function addProductRow() {
-      const options = inventoryList.map(i => `<option value="${escapeHTML(i.product_name)}">${escapeHTML(i.product_name)} (Stock: ${i.stock_quantity})</option>`).join('');
+    function closeOrderModal() {
+      document.getElementById('orderModal').classList.remove('active');
+      document.getElementById('orderForm').reset();
+      document.getElementById('editingOrderId').value = '';
+    }
+
+    function addProductRow(selectedProd = '', qty = 1) {
+      const options = inventoryList.map(i => {
+        const isSelected = i.product_name === selectedProd ? 'selected' : '';
+        return `<option value="${escapeHTML(i.product_name)}" ${isSelected}>${escapeHTML(i.product_name)} (Stock: ${i.stock_quantity})</option>`;
+      }).join('');
+      
       document.getElementById('productRowsContainer').insertAdjacentHTML('beforeend', `
         <div class="product-row" style="display:flex; gap:8px;">
-          <select class="prod-select" required style="flex:2;"><option value="">Select Item...</option>${options}</select>
-          <input type="number" class="prod-qty" value="1" min="1" required style="flex:1; max-width:80px;">
+          <select class="prod-select" required style="flex:2;">
+            <option value="" disabled ${!selectedProd ? 'selected' : ''}>Select Item...</option>
+            ${options}
+          </select>
+          <input type="number" class="prod-qty" value="${qty}" min="1" required style="flex:1; max-width:80px;">
           <button type="button" class="btn-action" style="color:#dc2626; padding:0 12px;" onclick="this.parentElement.remove()">X</button>
         </div>`);
     }
@@ -348,8 +415,10 @@
     async function submitOrder(e) {
       e.preventDefault();
       const btn = document.getElementById('btnSubmitOrder');
+      const editId = document.getElementById('editingOrderId').value;
+      
       btn.disabled = true;
-      btn.innerText = "Processing...";
+      btn.innerText = editId ? "Updating Order..." : "Processing...";
 
       const items = Array.from(document.querySelectorAll('.product-row')).map(row => ({
         product_name: row.querySelector('.prod-select').value, 
@@ -363,17 +432,21 @@
         shipping_address: document.getElementById('address').value, 
         cod_amount: document.getElementById('codAmount').value, 
         to_branch: document.getElementById('toBranch').value,
+        delivery_type: document.getElementById('deliveryType').value,
         instruction: document.getElementById('instruction').value,
         items
       };
 
+      const endpoint = editId ? `/api/orders/${editId}` : '/api/orders';
+      const method = editId ? 'PUT' : 'POST';
+
       try {
-        const res = await authFetch('/api/orders', { method: 'POST', body: JSON.stringify(payload) });
+        const res = await authFetch(endpoint, { method: method, body: JSON.stringify(payload) });
         const data = await res.json();
         if(!res.ok) throw new Error(data.error || "Order Failed");
         
-        showToast("Order saved & stock deducted");
-        document.getElementById('orderModal').classList.remove('active');
+        showToast(editId ? "Order Updated & Stock Reconciled" : "Order saved & stock deducted");
+        closeOrderModal();
         fetchOrders(); fetchInventory();
       } catch (err) { 
         showToast(err.message, true); 

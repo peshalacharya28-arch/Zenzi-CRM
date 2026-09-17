@@ -7,14 +7,13 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 
-// 1. Enforce Critical Secrets
 if (!process.env.NCM_TOKEN || !process.env.DATABASE_URL || !process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
   console.error("FATAL: Missing required environment variables. Halting boot.");
   process.exit(1);
 }
 
 const app = express();
-app.set('trust proxy', 1); // Required for rate limiting behind reverse proxies
+app.set('trust proxy', 1);
 
 app.use(express.json());
 app.use(cors({ origin: process.env.ALLOWED_ORIGIN || '*' })); 
@@ -34,7 +33,7 @@ const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABAS
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // Set to true if managing custom CA certs
+  ssl: { rejectUnauthorized: false } 
 });
 
 function sanitizePhone(phone) {
@@ -47,7 +46,6 @@ function sanitizeText(text) {
   return str.length > 0 ? str : null;
 }
 
-// 2. Schema Hardening & Normalization
 pool.query(`
   CREATE TABLE IF NOT EXISTS inventory (
     id SERIAL PRIMARY KEY,
@@ -83,7 +81,6 @@ pool.query(`
   EXCEPTION WHEN OTHERS THEN END $$;
 `).catch(err => console.error('Database migration error:', err));
 
-// 3. Authorization (JWT)
 const verifyAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -105,7 +102,6 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/analytics', (req, res) => res.sendFile(path.join(__dirname, 'public', 'analytics.html')));
 
-// 4. Sequential & Logged NCM Sync Engine
 async function syncOrdersWithNCM() {
   try {
     const activeOrdersRes = await pool.query(
@@ -131,7 +127,6 @@ async function syncOrdersWithNCM() {
         } else if (data && typeof data === 'object' && data.status) {
           latestNcmStatusStr = String(data.status).toUpperCase();
         } else {
-          console.warn(`[Sync Warn] Unrecognized status payload for tracking ${order.tracking_id}:`, JSON.stringify(data));
           continue;
         }
 
@@ -162,18 +157,14 @@ async function syncOrdersWithNCM() {
             [newStatus, processingTimestamp, order.id]
           );
         }
-      } catch (err) {
-        console.error(`[Sync Error] Tracking ID ${order.tracking_id} failed:`, err.message);
-      }
+      } catch (err) {}
     }
-  } catch (err) {
-    console.error('NCM Sync Engine Fatal Error:', err.message);
-  }
+  } catch (err) {}
 }
 
 setInterval(syncOrdersWithNCM, 10 * 60 * 1000);
 
-// --- INVENTORY ENDPOINTS ---
+// --- INVENTORY ---
 app.get('/api/inventory', verifyAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM inventory ORDER BY product_name ASC');
@@ -223,7 +214,7 @@ app.delete('/api/inventory/:id', verifyAuth, async (req, res) => {
   }
 });
 
-// --- ORDERS ENDPOINTS ---
+// --- ORDERS ---
 app.get('/api/branches', verifyAuth, async (req, res) => {
   try {
     const response = await axios.get('https://portal.nepalcanmove.com/api/v2/branches', {
@@ -238,14 +229,13 @@ app.get('/api/branches', verifyAuth, async (req, res) => {
 
 app.get('/api/orders', verifyAuth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM orders ORDER BY id DESC LIMIT 500'); // Pagination constraint
+    const result = await pool.query('SELECT * FROM orders ORDER BY id DESC LIMIT 500');
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to retrieve orders' });
   }
 });
 
-// 5. Remove GET Side-Effects (Deduplicate in Memory)
 app.get('/api/orders/:id', verifyAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
@@ -269,12 +259,9 @@ app.get('/api/orders/:id', verifyAuth, async (req, res) => {
               timestamp: c.added_time || new Date().toISOString()
             }));
         }
-      } catch (err) {
-        console.warn(`[API Warn] Failed fetching live comments for ${order.tracking_id}`);
-      }
+      } catch (err) {}
     }
 
-    // Merge without writing back to DB
     const merged = [...(order.comments || []), ...liveComments];
     order.comments = Array.from(new Map(merged.map(c => [c.text, c])).values())
                           .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -284,7 +271,6 @@ app.get('/api/orders/:id', verifyAuth, async (req, res) => {
   }
 });
 
-// 6. Transactional Lock (FOR UPDATE)
 app.post('/api/orders', verifyAuth, async (req, res) => {
   const customer_name = sanitizeText(req.body.customer_name);
   const phone_number = sanitizePhone(req.body.phone_number);
@@ -338,7 +324,85 @@ app.post('/api/orders', verifyAuth, async (req, res) => {
   }
 });
 
-// 7. State Machine Constraints
+// RESTORED: PUT Route for Editing Orders safely
+app.put('/api/orders/:id', verifyAuth, async (req, res) => {
+  const customer_name = sanitizeText(req.body.customer_name);
+  const phone_number = sanitizePhone(req.body.phone_number);
+  const shipping_address = sanitizeText(req.body.shipping_address);
+  const cod_amount = parseFloat(req.body.cod_amount) || 0;
+  const items = req.body.items;
+
+  if (!customer_name || !phone_number || !shipping_address || !Array.isArray(items)) {
+    return res.status(400).json({ error: 'Missing required fields or items array' });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const currentOrderRes = await client.query('SELECT status, items FROM orders WHERE id = $1 FOR UPDATE', [req.params.id]);
+    if (currentOrderRes.rows.length === 0) throw new Error('Order not found');
+
+    const currentOrder = currentOrderRes.rows[0];
+    if (currentOrder.status !== 'received') {
+      throw new Error('Order cannot be edited once it has passed "Received" status');
+    }
+
+    // Restore old stock
+    const oldItems = Array.isArray(currentOrder.items) ? currentOrder.items : [];
+    for (const oldItem of oldItems) {
+      if (oldItem.inventory_id) {
+        await client.query(
+          'UPDATE inventory SET stock_quantity = stock_quantity + $1 WHERE id = $2',
+          [oldItem.qty, oldItem.inventory_id]
+        );
+      }
+    }
+
+    // Deduct new stock safely
+    let savedItems = [];
+    let packageSummaryParts = [];
+
+    for (const item of items) {
+      const pName = sanitizeText(item.product_name);
+      const reqQty = parseInt(item.qty) || 1;
+      
+      const stockCheck = await client.query('SELECT id, stock_quantity FROM inventory WHERE product_name = $1 FOR UPDATE', [pName]);
+      if (stockCheck.rows.length === 0) throw new Error(`Product "${pName}" does not exist.`);
+      
+      const currentStock = stockCheck.rows[0].stock_quantity;
+      if (currentStock < reqQty) throw new Error(`Insufficient stock for "${pName}". Available: ${currentStock}`);
+
+      await client.query('UPDATE inventory SET stock_quantity = stock_quantity - $1 WHERE id = $2', [reqQty, stockCheck.rows[0].id]);
+      savedItems.push({ inventory_id: stockCheck.rows[0].id, product_name: pName, qty: reqQty });
+      packageSummaryParts.push(`${reqQty}x ${pName}`);
+    }
+
+    const finalPackageName = packageSummaryParts.join(', ') || 'Zenzi Item';
+
+    await client.query(
+      `UPDATE orders 
+       SET customer_name = $1, phone_number = $2, phone2 = $3, shipping_address = $4, 
+           package_name = $5, items = $6::jsonb, cod_amount = $7, to_branch = $8, instruction = $9, delivery_type = $10
+       WHERE id = $11`,
+      [
+        customer_name, phone_number, sanitizePhone(req.body.phone2), shipping_address, 
+        finalPackageName, JSON.stringify(savedItems), cod_amount, sanitizeText(req.body.to_branch) || 'KALANKI', 
+        sanitizeText(req.body.instruction), sanitizeText(req.body.delivery_type) || 'Door2Door', req.params.id
+      ]
+    );
+
+    await client.query('COMMIT');
+    res.json({ success: true, package_name: finalPackageName });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(400).json({ error: err.message || 'Failed to edit order' });
+  } finally {
+    client.release();
+  }
+});
+
 app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
   const status = sanitizeText(req.body.status);
   const orderId = req.params.id;
@@ -376,7 +440,6 @@ app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
     await pool.query(`UPDATE orders SET status = $1, status_updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [status, orderId]);
     res.json({ success: true, status });
   } catch (error) {
-    console.error("Status Update Failed:", error.response ? error.response.data : error.message);
     res.status(500).json({ error: 'Logistics processing failed', details: error.message });
   }
 });
@@ -399,7 +462,7 @@ app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
           { headers: { 'Authorization': `Token ${NCM_TOKEN}` }, timeout: 8000 }
         );
         if (ncmRes.status === 200 || ncmRes.status === 201) ncmPushed = true;
-      } catch (err) { console.error('NCM Post Comment Error'); }
+      } catch (err) {}
     }
 
     const commentObj = { id: Date.now(), text, author: req.user.email || 'Admin', timestamp: new Date().toISOString() };
@@ -419,7 +482,6 @@ app.post('/api/orders/sync', verifyAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-// 8. Safe Deletion (No Delivered Stock Inflation)
 app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -428,7 +490,7 @@ app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
     
     if (orderRes.rows.length > 0) {
       const order = orderRes.rows[0];
-      if (order.status !== 'delivered') { // Do not restore stock for successfully delivered items
+      if (order.status !== 'delivered') { 
         const items = Array.isArray(order.items) ? order.items : [];
         for (const item of items) {
           if (item.inventory_id) {
@@ -448,20 +510,113 @@ app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
   }
 });
 
-// Basic Analytics Endpoint
+// --- ANALYTICS ---
 app.get('/api/analytics', verifyAuth, async (req, res) => {
   try {
     const totalOrdersRes = await pool.query('SELECT COUNT(*) FROM orders');
+    const todayOrdersRes = await pool.query('SELECT COUNT(*) FROM orders WHERE created_at >= CURRENT_DATE');
+    const totalRevenueRes = await pool.query("SELECT SUM(cod_amount) FROM orders WHERE status != 'problem'");
     const deliveredCountRes = await pool.query("SELECT COUNT(*) FROM orders WHERE status = 'delivered'");
-    const totalRevenueRes = await pool.query("SELECT SUM(cod_amount) FROM orders WHERE status = 'delivered'");
-    
+    const branchBreakdownRes = await pool.query('SELECT to_branch, COUNT(*) as count FROM orders GROUP BY to_branch ORDER BY count DESC LIMIT 5');
+
+    const totalOrders = parseInt(totalOrdersRes.rows[0].count) || 0;
+    const todayOrders = parseInt(todayOrdersRes.rows[0].count) || 0;
+    const totalRevenue = parseFloat(totalRevenueRes.rows[0].sum) || 0;
+    const deliveredCount = parseInt(deliveredCountRes.rows[0].count) || 0;
+    const conversionRate = totalOrders > 0 ? ((deliveredCount / totalOrders) * 100).toFixed(1) : 0;
+
     res.json({
-      totalOrders: parseInt(totalOrdersRes.rows[0].count),
-      totalRevenue: parseFloat(totalRevenueRes.rows[0].sum) || 0,
-      deliveredCount: parseInt(deliveredCountRes.rows[0].count)
+      totalOrders, todayOrders, totalRevenue, deliveredCount,
+      conversionRate: `${conversionRate}%`, topBranches: branchBreakdownRes.rows
     });
   } catch (err) {
-    res.status(500).json({ error: 'Analytics failure' });
+    res.status(500).json({ error: 'Failed to calculate analytics metrics' });
+  }
+});
+
+// RESTORED: Full-Page Overview Endpoint
+app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
+  const { startDate, endDate } = req.query;
+
+  const now = new Date();
+  const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const end = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+  const startISO = start.toISOString();
+  const endISO = end.toISOString();
+
+  try {
+    const volumeRes = await pool.query(
+      `SELECT 
+         COUNT(*) as total_orders,
+         COUNT(*) FILTER (WHERE status = 'delivered') as delivered_orders,
+         COUNT(*) FILTER (WHERE status IN ('problem', 'hold')) as problem_stalled_orders,
+         COUNT(*) FILTER (WHERE status IN ('problem', 'returned', 'cancelled')) as rto_orders,
+         COALESCE(SUM(cod_amount) FILTER (WHERE status = 'delivered'), 0) as total_delivered_revenue
+       FROM orders WHERE created_at BETWEEN $1::timestamp AND $2::timestamp`,
+      [startISO, endISO]
+    );
+
+    const stats = volumeRes.rows[0] || {};
+    const totalOrders = parseInt(stats.total_orders) || 0;
+    const deliveredOrders = parseInt(stats.delivered_orders) || 0;
+    const problemStalledOrders = parseInt(stats.problem_stalled_orders) || 0;
+    const rtoOrders = parseInt(stats.rto_orders) || 0;
+    const totalDeliveredRevenue = parseFloat(stats.total_delivered_revenue) || 0;
+
+    const deliverySuccessRate = totalOrders > 0 ? ((deliveredOrders / totalOrders) * 100).toFixed(1) : "0.0";
+    const rtoRate = totalOrders > 0 ? ((rtoOrders / totalOrders) * 100).toFixed(1) : "0.0";
+    const bottleneckRate = totalOrders > 0 ? ((problemStalledOrders / totalOrders) * 100).toFixed(1) : "0.0";
+
+    const leadTimeRes = await pool.query(
+      `SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE(status_updated_at::timestamp, CURRENT_TIMESTAMP) - COALESCE(processing_started_at::timestamp, created_at::timestamp))) / 3600), 0) as avg_transit_hours
+       FROM orders WHERE status = 'delivered' AND created_at BETWEEN $1::timestamp AND $2::timestamp`,
+      [startISO, endISO]
+    );
+    const avgTransitHours = parseFloat(leadTimeRes.rows[0]?.avg_transit_hours || 0).toFixed(1);
+
+    const branchRes = await pool.query(
+      `SELECT to_branch, COUNT(*) as order_count FROM orders 
+       WHERE created_at BETWEEN $1::timestamp AND $2::timestamp 
+       GROUP BY to_branch ORDER BY order_count DESC LIMIT 10`,
+      [startISO, endISO]
+    );
+
+    const periodOrdersRes = await pool.query(`SELECT package_name FROM orders WHERE created_at BETWEEN $1::timestamp AND $2::timestamp AND package_name IS NOT NULL`, [startISO, endISO]);
+    
+    const productSalesMap = {};
+    let totalUnitsSoldInPeriod = 0;
+
+    periodOrdersRes.rows.forEach(row => {
+      const items = String(row.package_name).split(',');
+      items.forEach(itemStr => {
+        const match = itemStr.trim().match(/^(\d+)x\s+(.+)$/);
+        if (match) {
+          const qty = parseInt(match[1]) || 1;
+          const pName = match[2].trim();
+          productSalesMap[pName] = (productSalesMap[pName] || 0) + qty;
+          totalUnitsSoldInPeriod += qty;
+        }
+      });
+    });
+
+    const inventoryRes = await pool.query(`SELECT product_name, stock_quantity, sku FROM inventory ORDER BY product_name ASC`);
+    const velocityList = inventoryRes.rows.map(inv => {
+      const unitsSold = productSalesMap[inv.product_name] || 0;
+      const share = totalUnitsSoldInPeriod > 0 ? ((unitsSold / totalUnitsSoldInPeriod) * 100).toFixed(1) : "0.0";
+      return { product_name: inv.product_name, sku: inv.sku || '-', stock_quantity: inv.stock_quantity || 0, units_sold: unitsSold, volume_share: `${share}%` };
+    });
+
+    const topMovingProducts = [...velocityList].sort((a, b) => b.units_sold - a.units_sold).slice(0, 10);
+    const slowMovingProducts = [...velocityList].sort((a, b) => a.units_sold - b.units_sold).slice(0, 10);
+
+    res.json({
+      timeframe: { startDate: startISO, endDate: endISO },
+      summary: { totalOrders, totalDeliveredRevenue, deliverySuccessRate: `${deliverySuccessRate}%`, rtoRate: `${rtoRate}%`, bottleneckRate: `${bottleneckRate}%`, avgTransitHours: `${avgTransitHours} hrs` },
+      topBranches: branchRes.rows || [], topMovingProducts, slowMovingProducts
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to calculate dynamic analytics dataset' });
   }
 });
 
