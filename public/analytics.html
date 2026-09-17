@@ -305,8 +305,16 @@
       return res;
     }
 
-    function formatDate(d) {
-      return d.toISOString().split('T')[0];
+    // Format local date cleanly to YYYY-MM-DD HH:MM:SS (avoiding UTC offset conversion mismatches)
+    function formatLocalDateTime(d, isEnd = false) {
+      const pad = (n) => String(n).padStart(2, '0');
+      const year = d.getFullYear();
+      const month = pad(d.getMonth() + 1);
+      const day = pad(d.getDate());
+      const hours = isEnd ? '23' : '00';
+      const minutes = isEnd ? '59' : '00';
+      const seconds = isEnd ? '59' : '00';
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
 
     function setPresetTimeframe(preset, btnElement) {
@@ -334,11 +342,11 @@
         end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
       }
 
-      document.getElementById('startDateInput').value = formatDate(start);
-      document.getElementById('endDateInput').value = formatDate(end);
+      document.getElementById('startDateInput').value = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+      document.getElementById('endDateInput').value = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
 
-      activeStartDate = start.toISOString();
-      activeEndDate = end.toISOString();
+      activeStartDate = formatLocalDateTime(start, false);
+      activeEndDate = formatLocalDateTime(end, true);
 
       loadAnalyticsData();
     }
@@ -357,8 +365,8 @@
       const start = new Date(`${s}T00:00:00`);
       const end = new Date(`${e}T23:59:59`);
 
-      activeStartDate = start.toISOString();
-      activeEndDate = end.toISOString();
+      activeStartDate = formatLocalDateTime(start, false);
+      activeEndDate = formatLocalDateTime(end, true);
 
       loadAnalyticsData();
     }
