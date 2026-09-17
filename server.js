@@ -554,8 +554,14 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
   const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const end = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-  const startISO = start.toISOString();
-  const endISO = end.toISOString();
+  // Safely format dates to SQL-compatible strings (YYYY-MM-DD HH:MM:SS) to prevent query casting errors
+  const formatSqlDate = (d) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+
+  const startStr = formatSqlDate(start);
+  const endStr = formatSqlDate(end);
 
   try {
     const volumeRes = await pool.query(
@@ -566,7 +572,7 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
          COUNT(*) FILTER (WHERE status IN ('problem', 'returned', 'cancelled')) as rto_orders,
          COALESCE(SUM(cod_amount) FILTER (WHERE status = 'delivered'), 0) as total_delivered_revenue
        FROM orders WHERE created_at BETWEEN $1::timestamp AND $2::timestamp`,
-      [startISO, endISO]
+      [startStr, endStr]
     );
 
     const stats = volumeRes.rows[0] || {};
@@ -583,7 +589,7 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     const leadTimeRes = await pool.query(
       `SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE(status_updated_at::timestamp, CURRENT_TIMESTAMP) - COALESCE(processing_started_at::timestamp, created_at::timestamp))) / 3600), 0) as avg_transit_hours
        FROM orders WHERE status = 'delivered' AND created_at BETWEEN $1::timestamp AND $2::timestamp`,
-      [startISO, endISO]
+      [startStr, endStr]
     );
     const avgTransitHours = parseFloat(leadTimeRes.rows[0]?.avg_transit_hours || 0).toFixed(1);
 
@@ -591,10 +597,10 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
       `SELECT to_branch, COUNT(*) as order_count FROM orders 
        WHERE created_at BETWEEN $1::timestamp AND $2::timestamp 
        GROUP BY to_branch ORDER BY order_count DESC LIMIT 10`,
-      [startISO, endISO]
+      [startStr, endStr]
     );
 
-    const periodOrdersRes = await pool.query(`SELECT package_name FROM orders WHERE created_at BETWEEN $1::timestamp AND $2::timestamp AND package_name IS NOT NULL`, [startISO, endISO]);
+    const periodOrdersRes = await pool.query(`SELECT package_name FROM orders WHERE created_at BETWEEN $1::timestamp AND $2::timestamp AND package_name IS NOT NULL`, [startStr, endStr]);
     
     const productSalesMap = {};
     let totalUnitsSoldInPeriod = 0;
@@ -623,7 +629,7 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     const slowMovingProducts = [...velocityList].sort((a, b) => a.units_sold - b.units_sold).slice(0, 10);
 
     res.json({
-      timeframe: { startDate: startISO, endDate: endISO },
+      timeframe: { startDate: startStr, endDate: endStr },
       summary: { totalOrders, totalDeliveredRevenue, deliverySuccessRate: `${deliverySuccessRate}%`, rtoRate: `${rtoRate}%`, bottleneckRate: `${bottleneckRate}%`, avgTransitHours: `${avgTransitHours} hrs` },
       topBranches: branchRes.rows || [], topMovingProducts, slowMovingProducts
     });
