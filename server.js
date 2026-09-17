@@ -634,7 +634,8 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
       topBranches: branchRes.rows || [], topMovingProducts, slowMovingProducts
     });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to calculate dynamic analytics dataset' });
+    console.error("CRITICAL ANALYTICS ERROR:", err); // <-- THIS WILL PRINT IN YOUR TERMINAL
+    res.status(500).json({ error: 'Failed to calculate dynamic analytics dataset', details: err.message }); // <-- THIS WILL SHOW IN BROWSER NETWORK TAB
   }
 });
 
