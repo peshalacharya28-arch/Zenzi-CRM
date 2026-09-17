@@ -7,11 +7,6 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 
-if (!process.env.NCM_TOKEN || !process.env.DATABASE_URL || !process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-  console.error("FATAL: Missing required environment variables. Halting boot.");
-  process.exit(1);
-}
-
 const app = express();
 app.set('trust proxy', 1);
 
@@ -27,12 +22,14 @@ const apiLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 app.use(express.static(path.join(__dirname, 'public')));
 
-const NCM_TOKEN = process.env.NCM_TOKEN;
+const NCM_TOKEN = process.env.NCM_TOKEN || '6f33ba16bc5faf0902cc53ed920e78b75906b555';
 const NCM_FROM_BRANCH = process.env.NCM_FROM_BRANCH || 'KALANKI';
-const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://pnecdxsqaevyvsnibdcu.supabase.co";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
 
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:ZenziShop2026@db.pnecdxsqaevyvsnibdcu.supabase.co:5432/postgres',
   ssl: { rejectUnauthorized: false } 
 });
 
@@ -76,6 +73,10 @@ pool.query(`
   );
 
   ALTER TABLE orders ADD COLUMN IF NOT EXISTS items JSONB DEFAULT '[]'::jsonb;
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS comments JSONB DEFAULT '[]'::jsonb;
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS processing_started_at TIMESTAMP DEFAULT NULL;
+  
   DO $$ BEGIN
     ALTER TABLE orders ALTER COLUMN cod_amount TYPE NUMERIC USING (NULLIF(cod_amount::text, '')::NUMERIC);
   EXCEPTION WHEN OTHERS THEN END $$;
@@ -91,7 +92,7 @@ const verifyAuth = async (req, res, next) => {
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
 
   if (error || !user) {
-    return res.status(403).json({ error: 'Forbidden: Invalid or expired session token' });
+    return res.status(403).json({ error: 'Forbidden: Invalid session' });
   }
 
   req.user = user;
@@ -105,7 +106,7 @@ app.get('/analytics', (req, res) => res.sendFile(path.join(__dirname, 'public', 
 async function syncOrdersWithNCM() {
   try {
     const activeOrdersRes = await pool.query(
-      "SELECT id, tracking_id, status, processing_started_at FROM orders WHERE tracking_id IS NOT NULL AND status IN ('packed', 'processing')"
+      "SELECT id, tracking_id, status, processing_started_at, comments FROM orders WHERE tracking_id IS NOT NULL AND status IN ('packed', 'processing')"
     );
     const activeOrders = activeOrdersRes.rows;
     if (activeOrders.length === 0) return;
@@ -151,17 +152,36 @@ async function syncOrdersWithNCM() {
           }
         }
 
-        if (newStatus !== order.status) {
-          await pool.query(
-            "UPDATE orders SET status = $1, status_updated_at = CURRENT_TIMESTAMP, processing_started_at = $2 WHERE id = $3",
-            [newStatus, processingTimestamp, order.id]
-          );
-        }
+        let existingComments = Array.isArray(order.comments) ? order.comments : [];
+        try {
+          const commentRes = await axios.get(`https://portal.nepalcanmove.com/api/v1/order/comment?id=${order.tracking_id}`, {
+            headers: { 'Authorization': `Token ${NCM_TOKEN}` }, timeout: 6000
+          });
+          if (Array.isArray(commentRes.data)) {
+            commentRes.data.forEach(item => {
+              const textStr = String(item.comments || '').trim();
+              if (textStr && !existingComments.some(ec => ec.text === textStr)) {
+                existingComments.push({
+                  id: item.added_time || Date.now(),
+                  text: textStr,
+                  author: item.addedBy || 'NCM Staff',
+                  timestamp: item.added_time || new Date().toISOString()
+                });
+              }
+            });
+          }
+        } catch (err) {}
+
+        await pool.query(
+          "UPDATE orders SET status = $1, status_updated_at = CURRENT_TIMESTAMP, processing_started_at = $2, comments = $3 WHERE id = $4",
+          [newStatus, processingTimestamp, JSON.stringify(existingComments), order.id]
+        );
       } catch (err) {}
     }
   } catch (err) {}
 }
 
+setTimeout(syncOrdersWithNCM, 3000);
 setInterval(syncOrdersWithNCM, 10 * 60 * 1000);
 
 // --- INVENTORY ---
@@ -324,7 +344,6 @@ app.post('/api/orders', verifyAuth, async (req, res) => {
   }
 });
 
-// RESTORED: PUT Route for Editing Orders safely
 app.put('/api/orders/:id', verifyAuth, async (req, res) => {
   const customer_name = sanitizeText(req.body.customer_name);
   const phone_number = sanitizePhone(req.body.phone_number);
@@ -337,7 +356,6 @@ app.put('/api/orders/:id', verifyAuth, async (req, res) => {
   }
 
   const client = await pool.connect();
-
   try {
     await client.query('BEGIN');
 
@@ -349,18 +367,13 @@ app.put('/api/orders/:id', verifyAuth, async (req, res) => {
       throw new Error('Order cannot be edited once it has passed "Received" status');
     }
 
-    // Restore old stock
     const oldItems = Array.isArray(currentOrder.items) ? currentOrder.items : [];
     for (const oldItem of oldItems) {
       if (oldItem.inventory_id) {
-        await client.query(
-          'UPDATE inventory SET stock_quantity = stock_quantity + $1 WHERE id = $2',
-          [oldItem.qty, oldItem.inventory_id]
-        );
+        await client.query('UPDATE inventory SET stock_quantity = stock_quantity + $1 WHERE id = $2', [oldItem.qty, oldItem.inventory_id]);
       }
     }
 
-    // Deduct new stock safely
     let savedItems = [];
     let packageSummaryParts = [];
 
@@ -515,7 +528,7 @@ app.get('/api/analytics', verifyAuth, async (req, res) => {
   try {
     const totalOrdersRes = await pool.query('SELECT COUNT(*) FROM orders');
     const todayOrdersRes = await pool.query('SELECT COUNT(*) FROM orders WHERE created_at >= CURRENT_DATE');
-    const totalRevenueRes = await pool.query("SELECT SUM(cod_amount) FROM orders WHERE status != 'problem'");
+    const totalRevenueRes = await pool.query("SELECT SUM(cod_amount) FROM orders WHERE status = 'delivered'");
     const deliveredCountRes = await pool.query("SELECT COUNT(*) FROM orders WHERE status = 'delivered'");
     const branchBreakdownRes = await pool.query('SELECT to_branch, COUNT(*) as count FROM orders GROUP BY to_branch ORDER BY count DESC LIMIT 5');
 
@@ -534,7 +547,6 @@ app.get('/api/analytics', verifyAuth, async (req, res) => {
   }
 });
 
-// RESTORED: Full-Page Overview Endpoint
 app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
   const { startDate, endDate } = req.query;
 
