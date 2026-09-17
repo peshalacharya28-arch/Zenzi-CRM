@@ -551,14 +551,15 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
   const { startDate, endDate } = req.query;
 
   const now = new Date();
-  const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  const end = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const pad = (n) => String(n).padStart(2, '0');
+  const defaultStart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} 00:00:00`;
+  const defaultEnd = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} 23:59:59`;
 
-  const startISO = start.toISOString();
-  const endISO = end.toISOString();
+  // Use the incoming strings directly without UTC conversion shifts
+  const startStr = startDate ? decodeURIComponent(startDate) : defaultStart;
+  const endStr = endDate ? decodeURIComponent(endDate) : defaultEnd;
 
   try {
-    // 1. Safe Volume & Revenue query with standard aggregates
     const volumeRes = await pool.query(
       `SELECT 
          COUNT(*) as total_orders,
@@ -567,8 +568,8 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
          COALESCE(SUM(CASE WHEN status IN ('problem', 'returned', 'cancelled') THEN 1 ELSE 0 END), 0) as rto_orders,
          COALESCE(SUM(cod_amount) FILTER (WHERE status = 'delivered'), 0) as total_delivered_revenue
        FROM orders WHERE created_at BETWEEN $1::timestamp AND $2::timestamp`,
-      [startISO, endISO]
-    ).catch(() => ({ rows: [{ total_orders: 0, delivered_orders: 0, problem_stalled_orders: 0, rto_orders: 0, total_delivered_revenue: 0 }] }));
+      [startStr, endStr]
+    );
 
     const stats = volumeRes.rows[0] || {};
     const totalOrders = parseInt(stats.total_orders) || 0;
@@ -581,39 +582,36 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     const rtoRate = totalOrders > 0 ? ((rtoOrders / totalOrders) * 100).toFixed(1) : "0.0";
     const bottleneckRate = totalOrders > 0 ? ((problemStalledOrders / totalOrders) * 100).toFixed(1) : "0.0";
 
-    // 2. Safe Lead Time query
     let avgTransitHours = "0.0";
     try {
       const leadTimeRes = await pool.query(
         `SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE(status_updated_at, CURRENT_TIMESTAMP) - COALESCE(processing_started_at, created_at))) / 3600), 0) as avg_transit_hours
          FROM orders WHERE status = 'delivered' AND created_at BETWEEN $1::timestamp AND $2::timestamp`,
-        [startISO, endISO]
+        [startStr, endStr]
       );
       avgTransitHours = parseFloat(leadTimeRes.rows[0]?.avg_transit_hours || 0).toFixed(1);
     } catch (e) {
       avgTransitHours = "0.0";
     }
 
-    // 3. Safe Branch Breakdown query
     let branchRows = [];
     try {
       const branchRes = await pool.query(
         `SELECT to_branch, COUNT(*) as order_count FROM orders 
          WHERE created_at BETWEEN $1::timestamp AND $2::timestamp 
          GROUP BY to_branch ORDER BY order_count DESC LIMIT 10`,
-        [startISO, endISO]
+        [startStr, endStr]
       );
       branchRows = branchRes.rows || [];
     } catch (e) {
       branchRows = [];
     }
 
-    // 4. Safe Inventory Velocity parsing
     let periodOrdersRows = [];
     try {
       const periodOrdersRes = await pool.query(
         `SELECT package_name FROM orders WHERE created_at BETWEEN $1::timestamp AND $2::timestamp AND package_name IS NOT NULL`,
-        [startISO, endISO]
+        [startStr, endStr]
       );
       periodOrdersRows = periodOrdersRes.rows || [];
     } catch (e) {
@@ -623,7 +621,7 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     const productSalesMap = {};
     let totalUnitsSoldInPeriod = 0;
 
-    periodOrdersRows.rows.forEach(row => {
+    periodOrdersRows.forEach(row => {
       const items = String(row.package_name).split(',');
       items.forEach(itemStr => {
         const match = itemStr.trim().match(/^(\d+)x\s+(.+)$/);
@@ -654,19 +652,14 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     const slowMovingProducts = [...velocityList].sort((a, b) => a.units_sold - b.units_sold).slice(0, 10);
 
     res.json({
-      timeframe: { startDate: startISO, endDate: endISO },
+      timeframe: { startDate: startStr, endDate: endStr },
       summary: { totalOrders, totalDeliveredRevenue, deliverySuccessRate: `${deliverySuccessRate}%`, rtoRate: `${rtoRate}%`, bottleneckRate: `${bottleneckRate}%`, avgTransitHours: `${avgTransitHours} hrs` },
       topBranches: branchRows, topMovingProducts, slowMovingProducts
     });
   } catch (err) {
-    console.error("ANALYTICS FALLBACK TRIGGERED:", err.message);
-    res.status(200).json({
-      timeframe: { startDate: startISO, endDate: endISO },
-      summary: { totalOrders: 0, totalDeliveredRevenue: 0, deliverySuccessRate: "0.0%", rtoRate: "0.0%", bottleneckRate: "0.0%", avgTransitHours: "0.0 hrs" },
-      topBranches: [], topMovingProducts: [], slowMovingProducts: []
-    });
+    console.error("ANALYTICS ERROR:", err.message);
+    res.status(500).json({ error: 'Failed to calculate dynamic analytics dataset' });
   }
 });
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Zenzi CRM live on port ${PORT}`));
