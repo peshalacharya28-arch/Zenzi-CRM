@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const { Pool } = require('pg');
 const axios = require('axios');
@@ -43,13 +44,19 @@ function sanitizeText(text) {
   return str.length > 0 ? str : null;
 }
 
+// Database Migration Strategy (Non-destructive & Complete)
 pool.query(`
   CREATE TABLE IF NOT EXISTS inventory (
     id SERIAL PRIMARY KEY,
     product_name TEXT UNIQUE NOT NULL,
     stock_quantity INT DEFAULT 0,
-    sku TEXT
+    sku TEXT,
+    hs_code TEXT,
+    default_price NUMERIC DEFAULT 0
   );
+
+  ALTER TABLE inventory ADD COLUMN IF NOT EXISTS hs_code TEXT;
+  ALTER TABLE inventory ADD COLUMN IF NOT EXISTS default_price NUMERIC DEFAULT 0;
 
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -69,14 +76,20 @@ pool.query(`
     comments JSONB DEFAULT '[]'::jsonb,
     status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processing_started_at TIMESTAMP DEFAULT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    customer_pan TEXT,
+    ncm_order_id TEXT,
+    bill_no SERIAL
   );
 
   ALTER TABLE orders ADD COLUMN IF NOT EXISTS items JSONB DEFAULT '[]'::jsonb;
   ALTER TABLE orders ADD COLUMN IF NOT EXISTS comments JSONB DEFAULT '[]'::jsonb;
   ALTER TABLE orders ADD COLUMN IF NOT EXISTS status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
   ALTER TABLE orders ADD COLUMN IF NOT EXISTS processing_started_at TIMESTAMP DEFAULT NULL;
-  
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_pan TEXT;
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS ncm_order_id TEXT;
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS bill_no SERIAL;
+
   DO $$ BEGIN
     ALTER TABLE orders ALTER COLUMN cod_amount TYPE NUMERIC USING (NULLIF(cod_amount::text, '')::NUMERIC);
   EXCEPTION WHEN OTHERS THEN END $$;
@@ -197,15 +210,17 @@ app.get('/api/inventory', verifyAuth, async (req, res) => {
 app.post('/api/inventory', verifyAuth, async (req, res) => {
   const product_name = sanitizeText(req.body.product_name);
   const sku = sanitizeText(req.body.sku) || '';
+  const hs_code = sanitizeText(req.body.hs_code) || '';
   const stock_quantity = parseInt(req.body.stock_quantity) || 0;
+  const default_price = parseFloat(req.body.default_price) || 0;
 
   if (!product_name) return res.status(400).json({ error: 'Product name is required' });
 
   try {
     const result = await pool.query(
-      `INSERT INTO inventory (product_name, stock_quantity, sku) VALUES ($1, $2, $3)
-       ON CONFLICT (product_name) DO UPDATE SET stock_quantity = EXCLUDED.stock_quantity, sku = EXCLUDED.sku RETURNING *`,
-      [product_name, stock_quantity, sku]
+      `INSERT INTO inventory (product_name, stock_quantity, sku, hs_code, default_price) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (product_name) DO UPDATE SET stock_quantity = EXCLUDED.stock_quantity, sku = EXCLUDED.sku, hs_code = EXCLUDED.hs_code, default_price = EXCLUDED.default_price RETURNING *`,
+      [product_name, stock_quantity, sku, hs_code, default_price]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -312,25 +327,38 @@ app.post('/api/orders', verifyAuth, async (req, res) => {
       const pName = sanitizeText(item.product_name);
       const reqQty = parseInt(item.qty) || 1;
       
-      const stockCheck = await client.query('SELECT id, stock_quantity FROM inventory WHERE product_name = $1 FOR UPDATE', [pName]);
+      const stockCheck = await client.query('SELECT id, stock_quantity, hs_code, default_price FROM inventory WHERE product_name = $1 FOR UPDATE', [pName]);
       if (stockCheck.rows.length === 0) throw new Error(`Product "${pName}" does not exist.`);
       
       const currentStock = stockCheck.rows[0].stock_quantity;
       if (currentStock < reqQty) throw new Error(`Insufficient stock for "${pName}". Available: ${currentStock}`);
 
       await client.query('UPDATE inventory SET stock_quantity = stock_quantity - $1 WHERE id = $2', [reqQty, stockCheck.rows[0].id]);
-      savedItems.push({ inventory_id: stockCheck.rows[0].id, product_name: pName, qty: reqQty });
+      
+      const unit_price = item.unit_price !== undefined && item.unit_price !== '' ? parseFloat(item.unit_price) : (parseFloat(stockCheck.rows[0].default_price) || 0);
+      const discount_percent = item.discount_percent !== undefined && item.discount_percent !== '' ? parseFloat(item.discount_percent) : 0;
+      const hs_code = sanitizeText(item.hs_code) || stockCheck.rows[0].hs_code || '';
+
+      savedItems.push({
+        inventory_id: stockCheck.rows[0].id,
+        product_name: pName,
+        hs_code: hs_code,
+        qty: reqQty,
+        unit_price: unit_price,
+        discount_percent: discount_percent
+      });
       packageSummaryParts.push(`${reqQty}x ${pName}`);
     }
 
     const finalPackageName = packageSummaryParts.join(', ') || 'Zenzi Item';
     const result = await client.query(
-      `INSERT INTO orders (customer_name, phone_number, phone2, shipping_address, package_name, items, cod_amount, to_branch, instruction, delivery_type) 
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10) RETURNING id`,
+      `INSERT INTO orders (customer_name, phone_number, phone2, shipping_address, package_name, items, cod_amount, to_branch, instruction, delivery_type, customer_pan) 
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11) RETURNING id`,
       [
         customer_name, phone_number, sanitizePhone(req.body.phone2), shipping_address, 
         finalPackageName, JSON.stringify(savedItems), cod_amount, sanitizeText(req.body.to_branch) || 'KALANKI', 
-        sanitizeText(req.body.instruction), sanitizeText(req.body.delivery_type) || 'Door2Door'
+        sanitizeText(req.body.instruction), sanitizeText(req.body.delivery_type) || 'Door2Door',
+        sanitizeText(req.body.customer_pan)
       ]
     );
 
@@ -381,14 +409,29 @@ app.put('/api/orders/:id', verifyAuth, async (req, res) => {
       const pName = sanitizeText(item.product_name);
       const reqQty = parseInt(item.qty) || 1;
       
-      const stockCheck = await client.query('SELECT id, stock_quantity FROM inventory WHERE product_name = $1 FOR UPDATE', [pName]);
+      const stockCheck = await client.query('SELECT id, stock_quantity, hs_code, default_price FROM inventory WHERE product_name = $1 FOR UPDATE', [pName]);
       if (stockCheck.rows.length === 0) throw new Error(`Product "${pName}" does not exist.`);
       
       const currentStock = stockCheck.rows[0].stock_quantity;
       if (currentStock < reqQty) throw new Error(`Insufficient stock for "${pName}". Available: ${currentStock}`);
 
       await client.query('UPDATE inventory SET stock_quantity = stock_quantity - $1 WHERE id = $2', [reqQty, stockCheck.rows[0].id]);
-      savedItems.push({ inventory_id: stockCheck.rows[0].id, product_name: pName, qty: reqQty });
+      
+      // Preserve historical price/discount if provided explicitly; fallback to existing snapshot, then default_price
+      const existingSnapshot = oldItems.find(oi => oi.product_name === pName);
+      
+      const unit_price = item.unit_price !== undefined && item.unit_price !== '' ? parseFloat(item.unit_price) : (existingSnapshot ? parseFloat(existingSnapshot.unit_price) : (parseFloat(stockCheck.rows[0].default_price) || 0));
+      const discount_percent = item.discount_percent !== undefined && item.discount_percent !== '' ? parseFloat(item.discount_percent) : (existingSnapshot ? parseFloat(existingSnapshot.discount_percent) : 0);
+      const hs_code = sanitizeText(item.hs_code) || (existingSnapshot ? existingSnapshot.hs_code : stockCheck.rows[0].hs_code) || '';
+
+      savedItems.push({
+        inventory_id: stockCheck.rows[0].id,
+        product_name: pName,
+        hs_code: hs_code,
+        qty: reqQty,
+        unit_price: unit_price,
+        discount_percent: discount_percent
+      });
       packageSummaryParts.push(`${reqQty}x ${pName}`);
     }
 
@@ -397,12 +440,13 @@ app.put('/api/orders/:id', verifyAuth, async (req, res) => {
     await client.query(
       `UPDATE orders 
        SET customer_name = $1, phone_number = $2, phone2 = $3, shipping_address = $4, 
-           package_name = $5, items = $6::jsonb, cod_amount = $7, to_branch = $8, instruction = $9, delivery_type = $10
-       WHERE id = $11`,
+           package_name = $5, items = $6::jsonb, cod_amount = $7, to_branch = $8, instruction = $9, delivery_type = $10, customer_pan = $11
+       WHERE id = $12`,
       [
         customer_name, phone_number, sanitizePhone(req.body.phone2), shipping_address, 
         finalPackageName, JSON.stringify(savedItems), cod_amount, sanitizeText(req.body.to_branch) || 'KALANKI', 
-        sanitizeText(req.body.instruction), sanitizeText(req.body.delivery_type) || 'Door2Door', req.params.id
+        sanitizeText(req.body.instruction), sanitizeText(req.body.delivery_type) || 'Door2Door',
+        sanitizeText(req.body.customer_pan), req.params.id
       ]
     );
 
@@ -441,10 +485,10 @@ app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
       if (ncmResponse.status === 200 || ncmResponse.status === 201) {
         const ncmOrderId = ncmResponse.data.orderid || ncmResponse.data.order_id;
         await pool.query(
-          "UPDATE orders SET tracking_id = $1, vref_id = $2, status = 'packed', status_updated_at = CURRENT_TIMESTAMP WHERE id = $3",
+          "UPDATE orders SET tracking_id = $1, ncm_order_id = $1, vref_id = $2, status = 'packed', status_updated_at = CURRENT_TIMESTAMP WHERE id = $3",
           [String(ncmOrderId), vref, orderId]
         );
-        return res.json({ success: true, tracking_id: ncmOrderId, new_status: 'packed' });
+        return res.json({ success: true, tracking_id: ncmOrderId, ncm_order_id: ncmOrderId, new_status: 'packed' });
       } else {
         throw new Error('NCM API Rejected Creation');
       }
@@ -555,7 +599,6 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
   const defaultStart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} 00:00:00`;
   const defaultEnd = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} 23:59:59`;
 
-  // Safely parse incoming dates whether they are ISO strings or standard date strings
   const parseDateParam = (val, isEnd) => {
     if (!val) return isEnd ? defaultEnd : defaultStart;
     try {
@@ -578,7 +621,6 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
   const endStr = parseDateParam(endDate, true);
 
   try {
-    // Replaced FILTER syntax with standard CASE WHEN to prevent postgres driver/version syntax incompatibilities
     const volumeRes = await pool.query(
       `SELECT 
          COUNT(*) as total_orders,
@@ -677,7 +719,6 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
     });
   } catch (err) {
     console.error("ANALYTICS ERROR:", err.message);
-    // Expose the exact error detail to help diagnose immediately if anything else fails
     res.status(500).json({ error: 'Failed to calculate dynamic analytics dataset', details: err.message });
   }
 });

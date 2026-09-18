@@ -1,3 +1,4 @@
+<!-- dashboard.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,7 +13,7 @@
       --border-color: #e2e8f0; --primary-blue: #0284c7; --accent-badge: #f1f5f9; --ncm-pink: #e11d48;
     }
     * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg-light); margin: 0; padding: clamp(12px, 3vw, 32px); color: var(--text-main); }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg-light); margin: 0; padding: clamp(12px, 3vw, 32px); color: var(--text-main); }
     .container { max-width: 1400px; margin: 0 auto; width: 100%; }
     .header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
     h1 { font-size: clamp(22px, 4vw, 28px); font-weight: 700; margin: 0; }
@@ -46,7 +47,7 @@
     .search-box { width: 100%; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; background: #fafafa; outline: none; }
     @media (min-width: 768px) { .search-box { width: 320px; } }
     .table-wrapper { width: 100%; overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; text-align: left; min-width: 600px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; min-width: 700px; }
     th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-sub); padding: 12px 14px; border-bottom: 1px solid var(--border-color); }
     td { padding: 14px; border-bottom: 1px solid var(--border-color); font-size: 13px; vertical-align: middle; }
     tr:hover { background: #f8fafc; }
@@ -56,16 +57,17 @@
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: flex-end; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
     @media (min-width: 640px) { .modal-overlay { align-items: center; padding: 20px; } }
     .modal-overlay.active { opacity: 1; pointer-events: auto; }
-    .modal-content { background: #fff; padding: 20px; border-radius: 16px 16px 0 0; width: 100%; max-width: 650px; max-height: 85dvh; overflow-y: auto; }
+    .modal-content { background: #fff; padding: 20px; border-radius: 16px 16px 0 0; width: 100%; max-width: 720px; max-height: 85dvh; overflow-y: auto; }
     @media (min-width: 640px) { .modal-content { border-radius: 12px; max-height: 90vh; } }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; position: sticky; top: 0; background: #fff; z-index: 10; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); }
     .close-btn { background: none; border: none; font-size: 28px; cursor: pointer; color: var(--text-sub); padding: 6px; }
-    .product-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-    .product-row select { flex: 2; min-width: 140px; }
-    .product-row input[type="number"] { flex: 1; min-width: 70px; }
+    
+    .product-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 36px; gap: 8px; margin-bottom: 8px; align-items: center; }
+    @media (max-width: 640px) { .product-row { grid-template-columns: 1fr 1fr; } }
+    
     form { display: grid; grid-template-columns: 1fr; gap: 12px; }
     @media (min-width: 640px) { form { grid-template-columns: repeat(2, 1fr); } }
-    form input, form select { padding: 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 15px; outline: none; width: 100%; min-height: 48px; }
+    form input, form select { padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; outline: none; width: 100%; min-height: 44px; }
     .full-width { grid-column: 1 / -1; }
     .badge-stock { padding: 4px 8px; border-radius: 12px; font-weight: 700; font-size: 11px; }
     .stock-ok { background: #dcfce7; color: #15803d; }
@@ -75,17 +77,78 @@
     .toast.show { opacity: 1; transform: translateY(0); }
     .toast-error { background: #dc2626; }
     .toast-success { background: #15803d; }
-    .ncm-header-banner { background: #0f172a; color: #fff; padding: 16px 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
-    .ncm-badge { background: #16a34a; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-    .ncm-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-    @media (min-width: 768px) { .ncm-grid { grid-template-columns: repeat(3, 1fr); } }
-    .ncm-card { background: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-    .ncm-card-title { font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--ncm-pink); letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
-    .ncm-data-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #f1f5f9; font-size: 12px; }
-    .ncm-data-label { color: var(--text-sub); font-weight: 500; }
-    .ncm-data-value { font-weight: 700; color: var(--text-main); text-align: right; }
-    .comment-item { background: #f8fafc; border: 1px solid var(--border-color); padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 12px; }
-    .comment-meta { font-size: 10px; color: var(--text-sub); display: flex; justify-content: space-between; margin-bottom: 4px; }
+    
+    .bulk-toolbar { display: flex; align-items: center; gap: 12px; background: #f0f9ff; border: 1px solid #bae6fd; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 600; color: #0369a1; flex-wrap: wrap; }
+
+    /* EXACT PHYSICAL BILL PRINTING SPECIFICATION */
+    #printContainer { display: none; }
+    
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 10mm;
+      }
+      body * { visibility: hidden; }
+      #printContainer, #printContainer * { visibility: visible; }
+      #printContainer {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background: transparent !important;
+        color: #000 !important;
+        font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+      }
+      .bill-page {
+        width: 100%;
+        max-width: 190mm;
+        margin: 0 auto;
+        padding: 8mm;
+        box-sizing: border-box;
+        page-break-after: always;
+        page-break-inside: avoid;
+        color: #000 !important;
+        background: transparent !important;
+        border: 1px solid #000;
+        position: relative;
+        font-size: 12px;
+        line-height: 1.3;
+      }
+      .bill-page:last-child {
+        page-break-after: auto;
+      }
+      
+      .bill-header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 8px; }
+      .bill-logo-box { width: 65px; height: 65px; border-radius: 50%; border: 1.5px solid #000; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 9px; font-weight: bold; line-height: 1.1; padding: 4px; }
+      .bill-company-info { text-align: center; flex: 1; margin: 0 10px; }
+      .bill-company-name { font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; }
+      .bill-company-sub { font-size: 12px; font-weight: bold; margin-top: 2px; }
+      .bill-header-right { text-align: right; }
+      
+      .bill-pan-top { font-weight: bold; font-size: 12px; margin-bottom: 8px; }
+      .bill-no-box { border: 1.5px solid #000; padding: 2px 8px; display: inline-block; font-weight: bold; font-size: 13px; margin-bottom: 4px; }
+
+      .bill-customer-section { margin-bottom: 10px; font-size: 12px; }
+      .bill-field-row { display: flex; margin-bottom: 4px; align-items: center; }
+      .bill-field-label { width: 140px; font-weight: bold; }
+      .bill-field-dots { flex: 1; border-bottom: 1px dotted #000; height: 14px; padding-left: 4px; font-weight: bold; }
+      
+      .pan-boxes-container { display: flex; gap: 2px; margin-left: 4px; }
+      .pan-digit-box { width: 16px; height: 18px; border: 1px solid #000; text-align: center; font-size: 11px; font-weight: bold; line-height: 18px; }
+
+      .bill-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 12px; }
+      .bill-table th, .bill-table td { border: 1px solid #000; padding: 5px 6px; text-align: left; }
+      .bill-table th { font-weight: bold; text-transform: uppercase; font-size: 11px; text-align: center; }
+      
+      .bill-totals-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .bill-totals-table td { border: 1px solid #000; padding: 4px 6px; }
+
+      .bill-footer { margin-top: 25px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 11px; }
+      .bill-signature-line { border-top: 1px solid #000; width: 160px; text-align: center; padding-top: 4px; font-weight: bold; }
+    }
   </style>
 </head>
 <body>
@@ -116,6 +179,17 @@
       <div class="metric-card" style="grid-column: span 2;"><div><div class="metric-title">Delivered</div><div class="metric-value" id="count-delivered">0</div></div><div class="metric-icon" style="background: #dcfce7; color: #16a34a;">✅</div></div>
     </div>
 
+    <!-- BULK SELECTION ACTION BAR -->
+    <div class="bulk-toolbar" id="bulkToolbar">
+      <span id="selectedCountText" style="font-weight: 700;">0 Orders Selected</span>
+      <div style="margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn-action" style="padding: 6px 12px; min-height: 36px;" onclick="selectAllFiltered()">Select All</button>
+        <button class="btn-action" style="padding: 6px 12px; min-height: 36px;" onclick="clearSelection()">Clear Selection</button>
+        <button class="btn-action" style="padding: 6px 12px; min-height: 36px;" onclick="previewSelectedBills()">👁️ Preview Selected</button>
+        <button class="btn-action btn-primary" style="padding: 6px 12px; min-height: 36px;" onclick="printSelectedBills()">🖨️ Print Selected Bills</button>
+      </div>
+    </div>
+
     <div class="table-card">
       <div class="table-toolbar">
         <div class="tabs">
@@ -134,6 +208,7 @@
         <table>
           <thead>
             <tr>
+              <th style="width: 36px; text-align: center;"><input type="checkbox" id="headerCheckbox" onchange="toggleSelectAllRows(this.checked)"></th>
               <th>Customer</th>
               <th>Package / Items</th>
               <th>COD Amount</th>
@@ -160,6 +235,7 @@
         <input type="text" id="name" placeholder="Customer Name *" required>
         <input type="text" id="phone" placeholder="Primary Phone *" required>
         <input type="text" id="phone2" placeholder="Secondary Phone (Optional)">
+        <input type="text" id="customerPan" placeholder="Customer PAN No. (Optional)">
         
         <div class="full-width" style="border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; background: #fafafa;">
           <label style="font-size: 12px; font-weight: 700; color: var(--text-sub); display: block; margin-bottom: 8px;">PRODUCTS IN ORDER</label>
@@ -167,7 +243,7 @@
           <button type="button" class="btn-action" style="font-size: 12px; padding: 8px 12px; margin-top: 4px;" onclick="addProductRow()">+ Add Another Item</button>
         </div>
 
-        <input type="number" id="codAmount" placeholder="Custom COD Amount (NPR) *" required>
+        <input type="number" id="codAmount" placeholder="Custom COD Amount (NPR) *" required step="0.01">
         <input list="branchList" id="toBranch" placeholder="NCM Branch *" required>
         <datalist id="branchList"></datalist>
         <select id="deliveryType" class="full-width">
@@ -183,25 +259,27 @@
     </div>
   </div>
 
-  <!-- INVENTORY MODAL RESTORED -->
+  <!-- INVENTORY MODAL -->
   <div class="modal-overlay" id="inventoryModal" onclick="if(event.target===this) closeInventoryModal()">
-    <div class="modal-content" style="max-width: 800px;" onclick="event.stopPropagation()">
+    <div class="modal-content" style="max-width: 850px;" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 style="margin: 0; font-size: 18px;">Stock Inventory Management</h3>
         <button class="close-btn" onclick="closeInventoryModal()">&times;</button>
       </div>
       
-      <form id="inventoryForm" style="margin-bottom: 16px; padding: 12px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 8px;">
+      <form id="inventoryForm" style="margin-bottom: 16px; padding: 12px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 8px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
         <input type="text" id="invProductName" placeholder="Product Name *" required>
         <input type="text" id="invSKU" placeholder="SKU Code (Optional)">
-        <input type="number" id="invStock" placeholder="Stock Quantity *" required min="0">
+        <input type="text" id="invHSCode" placeholder="HS Code (Optional)">
+        <input type="number" id="invDefaultPrice" placeholder="Default Selling Price (NPR) *" required step="0.01" min="0">
+        <input type="number" id="invStock" class="full-width" placeholder="Stock Quantity *" required min="0">
         <button type="submit" id="btnSubmitInventory" class="btn-action btn-primary full-width" style="padding: 10px;">
           <span>Add / Update Product</span>
         </button>
       </form>
 
       <div style="margin-bottom: 12px;">
-        <input type="text" id="invSearchInput" class="search-box" style="width: 100%;" placeholder="🔍 Search product name or SKU..." oninput="renderInventoryTable()">
+        <input type="text" id="invSearchInput" class="search-box" style="width: 100%;" placeholder="🔍 Search product name, SKU, or HS Code..." oninput="renderInventoryTable()">
       </div>
 
       <div class="table-wrapper">
@@ -210,6 +288,8 @@
             <tr>
               <th>Product Name</th>
               <th>SKU</th>
+              <th>HS Code</th>
+              <th>Price (NPR)</th>
               <th>Stock Level</th>
               <th>Adjust</th>
               <th>Action</th>
@@ -221,7 +301,7 @@
     </div>
   </div>
 
-  <!-- NCM DETAIL & COMMENTS MODAL RESTORED -->
+  <!-- NCM DETAIL & COMMENTS MODAL -->
   <div class="modal-overlay" id="detailModal" onclick="if(event.target===this) closeDetailModal()">
     <div class="modal-content" style="max-width: 1100px; padding: 24px;" onclick="event.stopPropagation()">
       <div class="modal-header" style="border: none; padding-bottom: 0;">
@@ -249,6 +329,7 @@
             <div class="ncm-data-row"><span class="ncm-data-label">COD Charge</span><span class="ncm-data-value" id="detail-cod">Rs. 0</span></div>
             <div class="ncm-data-row"><span class="ncm-data-label">Receiver</span><span class="ncm-data-value" id="detail-receiver" style="color:#0284c7;">-</span></div>
             <div class="ncm-data-row"><span class="ncm-data-label">Phone</span><span class="ncm-data-value" id="detail-phone">-</span></div>
+            <div class="ncm-data-row"><span class="ncm-data-label">PAN No.</span><span class="ncm-data-value" id="detail-pan">-</span></div>
             <div class="ncm-data-row"><span class="ncm-data-label">Address</span><span class="ncm-data-value" id="detail-address">-</span></div>
             <div class="ncm-data-row"><span class="ncm-data-label">Delivery Type</span><span class="ncm-data-value" id="detail-delivery-type">Door2Door</span></div>
           </div>
@@ -292,6 +373,24 @@
     </div>
   </div>
 
+  <!-- BILL PREVIEW MODAL -->
+  <div class="modal-overlay" id="billPreviewModal" onclick="if(event.target===this) closeBillPreviewModal()">
+    <div class="modal-content" style="max-width: 850px; padding: 20px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 18px;">Bill Preview</h3>
+        <button class="close-btn" onclick="closeBillPreviewModal()">&times;</button>
+      </div>
+      <div id="previewBillRenderArea" style="background: #fff; padding: 10px; border: 1px solid var(--border-color); max-height: 70vh; overflow-y: auto;"></div>
+      <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+        <button class="btn-action" onclick="closeBillPreviewModal()">Close</button>
+        <button class="btn-action btn-primary" onclick="triggerPrintFromPreview()">Print Bill(s)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN PRINT CONTAINER FOR BULK & SINGLE PRINTING -->
+  <div id="printContainer"></div>
+
   <script>
     function escapeHTML(str) {
       if (!str) return '';
@@ -307,6 +406,7 @@
     let inventoryList = [];
     let currentFilter = 'all';
     let activeOrderDetailId = null;
+    let selectedOrderIds = new Set();
 
     function showToast(message, type = 'success') {
       const container = document.getElementById('toast-container');
@@ -398,12 +498,12 @@
       
       const filtered = allOrders.filter(o => {
         const matchesTab = currentFilter === 'all' || o.status === currentFilter;
-        const searchStr = [o.customer_name, o.phone_number, o.phone2, o.shipping_address, o.package_name, o.to_branch, o.tracking_id, o.vref_id].join(' ').toLowerCase();
+        const searchStr = [o.customer_name, o.phone_number, o.phone2, o.shipping_address, o.package_name, o.to_branch, o.tracking_id, o.vref_id, o.customer_pan].join(' ').toLowerCase();
         return matchesTab && (search === '' || searchStr.includes(search));
       });
 
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color: var(--text-sub); padding:32px;">No orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--text-sub); padding:32px;">No orders found.</td></tr>`;
         return;
       }
 
@@ -413,6 +513,7 @@
         const trackingText = o.tracking_id ? `NCM ID: ${o.tracking_id}` : 'Not Dispatched';
         const canEdit = o.status === 'received';
         const hasTracking = !!o.tracking_id;
+        const isChecked = selectedOrderIds.has(o.id) ? 'checked' : '';
 
         const selectHtml = `
           <select class="status-select" onchange="updateOrderStatus(${o.id}, this.value)">
@@ -428,6 +529,9 @@
         const editBtnHtml = canEdit ? `<button class="btn-icon" onclick="openOrderModal(${o.id})" title="Edit Order">✏️</button>` : '';
 
         tr.innerHTML = `
+          <td style="text-align:center;">
+            <input type="checkbox" onchange="toggleSelectOrder(${o.id}, this.checked)" ${isChecked}>
+          </td>
           <td>
             <span class="cust-name">${escapeHTML(o.customer_name)}</span>
             <span class="cust-sub">${escapeHTML(phoneText)} &bull; ${escapeHTML(o.shipping_address)}</span>
@@ -447,6 +551,7 @@
           </td>
           <td>
             <div style="display:flex; gap:6px;">
+              <button class="btn-icon" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;" onclick="singlePrintBill(${o.id})" title="Print Bill">🖨️</button>
               <button class="btn-icon" style="background:#fff1f2; color:#e11d48; border-color:#fecdd3;" onclick="openDetailModal(${o.id})" title="View Details & Comments">👁️</button>
               ${editBtnHtml}
               <button class="btn-action" style="color:#dc2626; padding: 6px 10px; font-size:11px; min-height:36px;" onclick="deleteOrder(${o.id})">Delete</button>
@@ -455,6 +560,275 @@
         `;
         tbody.appendChild(tr);
       });
+
+      updateBulkToolbarUI();
+    }
+
+    // --- BULK SELECTION ENGINE ---
+    function toggleSelectOrder(id, isSelected) {
+      if (isSelected) selectedOrderIds.add(id);
+      else selectedOrderIds.delete(id);
+      updateBulkToolbarUI();
+    }
+
+    function toggleSelectAllRows(isSelected) {
+      const search = document.getElementById('searchInput').value.trim().toLowerCase();
+      const filtered = allOrders.filter(o => {
+        const matchesTab = currentFilter === 'all' || o.status === currentFilter;
+        const searchStr = [o.customer_name, o.phone_number, o.phone2, o.shipping_address, o.package_name, o.to_branch, o.tracking_id, o.vref_id, o.customer_pan].join(' ').toLowerCase();
+        return matchesTab && (search === '' || searchStr.includes(search));
+      });
+
+      filtered.forEach(o => {
+        if (isSelected) selectedOrderIds.add(o.id);
+        else selectedOrderIds.delete(o.id);
+      });
+
+      renderTable();
+    }
+
+    function selectAllFiltered() {
+      toggleSelectAllRows(true);
+      document.getElementById('headerCheckbox').checked = true;
+    }
+
+    function clearSelection() {
+      selectedOrderIds.clear();
+      document.getElementById('headerCheckbox').checked = false;
+      renderTable();
+    }
+
+    function updateBulkToolbarUI() {
+      const count = selectedOrderIds.size;
+      document.getElementById('selectedCountText').innerText = `${count} Orders Selected`;
+    }
+
+    // --- NUMBER TO WORDS conversion ---
+    function numberToWords(num) {
+      if (num === null || num === undefined || isNaN(num) || num === 0) return "Zero Rupees Only";
+      
+      const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+      const b = ['', '', 'Twenty ', 'Thirty ', 'Forty ', 'Fifty ', 'Sixty ', 'Seventy ', 'Eighty ', 'Ninety '];
+
+      function inWords(n) {
+        if ((n = n.toString()).length > 9) return 'overflow';
+        let n_array = ('000000000' + n).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+        if (!n_array) return ''; 
+        let str = '';
+        str += (n_array[1] != 0) ? (a[Number(n_array[1])] || b[n_array[1][0]] + a[n_array[1][1]]) + 'Crore ' : '';
+        str += (n_array[2] != 0) ? (a[Number(n_array[2])] || b[n_array[2][0]] + a[n_array[2][1]]) + 'Lakh ' : '';
+        str += (n_array[3] != 0) ? (a[Number(n_array[3])] || b[n_array[3][0]] + a[n_array[3][1]]) + 'Thousand ' : '';
+        str += (n_array[4] != 0) ? (a[Number(n_array[4])] || b[n_array[4][0]] + a[n_array[4][1]]) + 'Hundred ' : '';
+        str += (n_array[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n_array[5])] || b[n_array[5][0]] + a[n_array[5][1]]) : '';
+        return str;
+      }
+
+      const parts = Number(num).toFixed(2).split('.');
+      let rupees = inWords(parseInt(parts[0]));
+      let result = rupees ? rupees.trim() + " Rupees" : "";
+
+      if (parts[1] && parseInt(parts[1]) > 0) {
+        let paisa = inWords(parseInt(parts[1]));
+        if (paisa) result += " and " + paisa.trim() + " Paisa";
+      }
+
+      return result ? result + " Only" : "Zero Rupees Only";
+    }
+
+    // --- EXACT PHYSICAL BILL TEMPLATE MATCHING REFERENCE IMAGE ---
+    function generateBillHTML(order) {
+      const items = Array.isArray(order.items) ? order.items : [];
+      let subtotal = 0;
+      let totalDiscount = 0;
+
+      let rowsHtml = '';
+      
+      items.forEach((item, index) => {
+        const qty = parseInt(item.qty) || 1;
+        const rate = parseFloat(item.unit_price) || 0;
+        const discountPct = parseFloat(item.discount_percent) || 0;
+        
+        const lineTotal = qty * rate;
+        const lineDiscount = lineTotal * (discountPct / 100);
+        
+        subtotal += lineTotal;
+        totalDiscount += lineDiscount;
+
+        rowsHtml += `
+          <tr>
+            <td style="text-align: center;">${index + 1}</td>
+            <td style="text-align: center;">${escapeHTML(item.hs_code || '')}</td>
+            <td>${escapeHTML(item.product_name)}</td>
+            <td style="text-align: center;">${qty}</td>
+            <td style="text-align: right;">${rate > 0 ? rate.toFixed(2) : ''}</td>
+            <td style="text-align: right;">${lineTotal > 0 ? lineTotal.toFixed(2) : ''}</td>
+          </tr>
+        `;
+      });
+
+      // Pad exactly to 8 table rows matching physical paper dimensions
+      const padCount = Math.max(0, 8 - items.length);
+      for (let i = 0; i < padCount; i++) {
+        rowsHtml += `
+          <tr>
+            <td style="text-align: center;">&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+          </tr>
+        `;
+      }
+
+      const grandTotal = subtotal - totalDiscount;
+      const amountInWordsStr = numberToWords(grandTotal);
+      const formattedDate = order.created_at ? new Date(order.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      const panStr = String(order.customer_pan || '').padStart(9, ' ');
+      
+      let panBoxesHtml = '';
+      for (let i = 0; i < 9; i++) {
+        const char = panStr[i] && panStr[i] !== ' ' ? panStr[i] : '&nbsp;';
+        panBoxesHtml += `<div class="pan-digit-box">${char}</div>`;
+      }
+
+      return `
+        <div class="bill-page">
+          <div class="bill-header">
+            <div class="bill-logo-box">
+              ZENZI SHOP<br>Kathmandu
+            </div>
+            <div class="bill-company-info">
+              <div class="bill-company-name">ZENZI SHOP PVT. LTD.</div>
+              <div class="bill-company-sub">Kathmandu-15, Nepal</div>
+              <div style="font-size: 11px; margin-top: 2px;">Contact No.: 9847623357 / 9845368724</div>
+            </div>
+            <div class="bill-header-right">
+              <div class="bill-pan-top">PAN No.: 623704035</div>
+              <div class="bill-no-box">Bill No.: ${String(order.bill_no || order.id).padStart(3, '0')}</div>
+              <div style="font-size: 11px; margin-top: 4px;">Date: ${formattedDate}</div>
+            </div>
+          </div>
+
+          <div class="bill-customer-section">
+            <div class="bill-field-row">
+              <div class="bill-field-label">Customer's Name:</div>
+              <div class="bill-field-dots">${escapeHTML(order.customer_name)}</div>
+            </div>
+            <div class="bill-field-row">
+              <div class="bill-field-label">Customer's Address:</div>
+              <div class="bill-field-dots">${escapeHTML(order.shipping_address)}</div>
+            </div>
+            <div class="bill-field-row">
+              <div class="bill-field-label">Customer's PAN No.:</div>
+              <div class="pan-boxes-container">${panBoxesHtml}</div>
+            </div>
+            <div class="bill-field-row">
+              <div class="bill-field-label">NCM Order ID:</div>
+              <div class="bill-field-dots">${escapeHTML(order.ncm_order_id || order.tracking_id || '')}</div>
+            </div>
+            <div class="bill-field-row">
+              <div class="bill-field-label">Contact No.:</div>
+              <div class="bill-field-dots">${escapeHTML(order.phone_number)}</div>
+            </div>
+          </div>
+
+          <table class="bill-table">
+            <thead>
+              <tr>
+                <th style="width: 6%;">S.N.</th>
+                <th style="width: 14%;">H.S. Code</th>
+                <th style="width: 44%;">Particulars</th>
+                <th style="width: 8%;">Qty.</th>
+                <th style="width: 13%;">Rate</th>
+                <th style="width: 15%;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <table class="bill-totals-table">
+            <tr>
+              <td rowspan="3" style="width: 65%; vertical-align: top; font-size: 11px;">
+                <strong>In words Rs:</strong> ${amountInWordsStr}
+              </td>
+              <td style="width: 18%; font-weight: bold; text-align: right;">Sub Total</td>
+              <td style="width: 17%; text-align: right; font-weight: bold;">${subtotal > 0 ? subtotal.toFixed(2) : ''}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: bold; text-align: right;">% Discount</td>
+              <td style="text-align: right; font-weight: bold;">${totalDiscount > 0 ? totalDiscount.toFixed(2) : ''}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: bold; text-align: right;">Grand TOTAL</td>
+              <td style="text-align: right; font-weight: bold;">${grandTotal > 0 ? grandTotal.toFixed(2) : ''}</td>
+            </tr>
+          </table>
+
+          <div class="bill-footer">
+            <div>
+              <div style="font-size: 11px; font-weight: bold;">* "भुलसुधार लिने दिने।"</div>
+            </div>
+            <div class="bill-signature-line">
+              Authorized Signature
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // --- PRINT & PREVIEW ENGINE ---
+    function singlePrintBill(id) {
+      const order = allOrders.find(o => o.id === id);
+      if (!order) return showToast("Order not found", "error");
+
+      const printContainer = document.getElementById('printContainer');
+      printContainer.innerHTML = generateBillHTML(order);
+      window.print();
+    }
+
+    function printSelectedBills() {
+      if (selectedOrderIds.size === 0) return showToast("No orders selected for printing", "error");
+
+      const printContainer = document.getElementById('printContainer');
+      let combinedHtml = '';
+
+      selectedOrderIds.forEach(id => {
+        const order = allOrders.find(o => o.id === id);
+        if (order) combinedHtml += generateBillHTML(order);
+      });
+
+      printContainer.innerHTML = combinedHtml;
+      window.print();
+    }
+
+    function previewSelectedBills() {
+      if (selectedOrderIds.size === 0) return showToast("No orders selected for preview", "error");
+
+      const renderArea = document.getElementById('previewBillRenderArea');
+      let combinedHtml = '';
+
+      selectedOrderIds.forEach(id => {
+        const order = allOrders.find(o => o.id === id);
+        if (order) combinedHtml += generateBillHTML(order);
+      });
+
+      renderArea.innerHTML = combinedHtml;
+      document.getElementById('billPreviewModal').classList.add('active');
+    }
+
+    function closeBillPreviewModal() {
+      document.getElementById('billPreviewModal').classList.remove('active');
+    }
+
+    function triggerPrintFromPreview() {
+      const renderArea = document.getElementById('previewBillRenderArea');
+      const printContainer = document.getElementById('printContainer');
+      printContainer.innerHTML = renderArea.innerHTML;
+      closeBillPreviewModal();
+      window.print();
     }
 
     async function updateOrderStatus(id, newStatus) {
@@ -468,7 +842,7 @@
       fetchOrders();
     }
 
-    // -- INVENTORY LOGIC (Restored clean UI) --
+    // --- INVENTORY UI LOGIC ---
     function openInventoryModal() { fetchInventory(); document.getElementById('inventoryModal').classList.add('active'); }
     function closeInventoryModal() { document.getElementById('inventoryModal').classList.remove('active'); }
 
@@ -478,11 +852,13 @@
       tbody.innerHTML = '';
 
       const filtered = inventoryList.filter(item => {
-        return (item.product_name || '').toLowerCase().includes(search) || (item.sku || '').toLowerCase().includes(search);
+        return (item.product_name || '').toLowerCase().includes(search) || 
+               (item.sku || '').toLowerCase().includes(search) ||
+               (item.hs_code || '').toLowerCase().includes(search);
       });
 
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-sub);">No inventory items match your search.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--text-sub);">No inventory items match search.</td></tr>`;
         return;
       }
 
@@ -492,6 +868,8 @@
         tr.innerHTML = `
           <td><strong>${escapeHTML(item.product_name)}</strong></td>
           <td>${escapeHTML(item.sku) || '-'}</td>
+          <td>${escapeHTML(item.hs_code) || '-'}</td>
+          <td>NPR ${item.default_price || 0}</td>
           <td><span class="badge-stock ${isLow ? 'stock-low' : 'stock-ok'}">${item.stock_quantity} available</span></td>
           <td>
             <button class="btn-action" style="padding:4px 10px; min-height:36px;" onclick="adjustStock(${item.id}, 1)">+1</button>
@@ -510,15 +888,17 @@
         body: JSON.stringify({
           product_name: document.getElementById('invProductName').value.trim(),
           sku: document.getElementById('invSKU').value.trim(),
+          hs_code: document.getElementById('invHSCode').value.trim(),
+          default_price: document.getElementById('invDefaultPrice').value,
           stock_quantity: document.getElementById('invStock').value
         })
       });
       if (res.ok) {
-        showToast("Inventory product updated!");
+        showToast("Inventory product saved!");
         document.getElementById('inventoryForm').reset();
         await fetchInventory();
       } else {
-        showToast("Failed to update inventory.", "error");
+        showToast("Failed to save inventory product.", "error");
       }
     };
 
@@ -535,7 +915,7 @@
       await fetchInventory();
     }
 
-    // -- ORDER MODAL & PRODUCTS FIX --
+    // --- ORDER MODAL LOGIC (Rate, Discount, HS Code) ---
     function openOrderModal(editOrderId = null) {
       document.getElementById('productRowsContainer').innerHTML = '';
       document.getElementById('editingOrderId').value = editOrderId || '';
@@ -547,6 +927,7 @@
           document.getElementById('name').value = order.customer_name || '';
           document.getElementById('phone').value = order.phone_number || '';
           document.getElementById('phone2').value = order.phone2 || '';
+          document.getElementById('customerPan').value = order.customer_pan || '';
           document.getElementById('address').value = order.shipping_address || '';
           document.getElementById('codAmount').value = order.cod_amount || '';
           document.getElementById('toBranch').value = order.to_branch || 'KALANKI';
@@ -554,12 +935,7 @@
           document.getElementById('instruction').value = order.instruction || '';
 
           if (Array.isArray(order.items) && order.items.length > 0) {
-            order.items.forEach(item => addProductRow(item.product_name, item.qty));
-          } else if (order.package_name) {
-            order.package_name.split(',').forEach(str => {
-              const match = str.trim().match(/^(\d+)x\s+(.+)$/);
-              if (match) addProductRow(match[2].trim(), parseInt(match[1]) || 1);
-            });
+            order.items.forEach(item => addProductRow(item.product_name, item.qty, item.unit_price, item.discount_percent, item.hs_code));
           } else {
             addProductRow();
           }
@@ -578,25 +954,45 @@
       document.getElementById('editingOrderId').value = '';
     }
 
-    function addProductRow(selectedProd = '', qty = 1) {
+    function addProductRow(selectedProd = '', qty = 1, unitPrice = '', discountPercent = 0, hsCode = '') {
       const container = document.getElementById('productRowsContainer');
       const row = document.createElement('div');
       row.className = 'product-row';
 
       let options = inventoryList.map(item => {
         const isSelected = item.product_name === selectedProd ? 'selected' : '';
-        return `<option value="${escapeHTML(item.product_name)}" ${isSelected}>${escapeHTML(item.product_name)} (${item.stock_quantity} in stock)</option>`;
+        return `<option value="${escapeHTML(item.product_name)}" data-price="${item.default_price || 0}" data-hscode="${escapeHTML(item.hs_code || '')}" ${isSelected}>${escapeHTML(item.product_name)} (${item.stock_quantity} in stock)</option>`;
       }).join('');
 
       row.innerHTML = `
-        <select class="prod-select" required>
+        <select class="prod-select" onchange="onProductSelectChange(this)" required>
           <option value="" disabled ${!selectedProd ? 'selected' : ''}>Select Product...</option>
           ${options}
         </select>
-        <input type="number" class="prod-qty" value="${qty}" min="1" placeholder="Qty" required>
-        <button type="button" class="btn-action" style="color:#dc2626; padding:0 12px; min-height:44px;" onclick="this.parentElement.remove()">&times;</button>
+        <input type="number" class="prod-qty" value="${qty}" min="1" placeholder="Qty *" required>
+        <input type="number" class="prod-price" value="${unitPrice}" step="0.01" min="0" placeholder="Rate (NPR) *" required>
+        <input type="number" class="prod-discount" value="${discountPercent !== undefined ? discountPercent : 0}" step="0.01" min="0" max="100" placeholder="Disc %">
+        <input type="hidden" class="prod-hscode" value="${hsCode}">
+        <button type="button" class="btn-action" style="color:#dc2626; padding:0 8px; min-height:44px;" onclick="this.parentElement.remove()">&times;</button>
       `;
       container.appendChild(row);
+    }
+
+    function onProductSelectChange(selectElem) {
+      const selectedOption = selectElem.options[selectElem.selectedIndex];
+      const defaultPrice = selectedOption.getAttribute('data-price') || 0;
+      const defaultHSCode = selectedOption.getAttribute('data-hscode') || '';
+      const row = selectElem.parentElement;
+      
+      const priceInput = row.querySelector('.prod-price');
+      if (priceInput && (!priceInput.value || parseFloat(priceInput.value) === 0)) {
+        priceInput.value = defaultPrice;
+      }
+      
+      const hsInput = row.querySelector('.prod-hscode');
+      if (hsInput) {
+        hsInput.value = defaultHSCode;
+      }
     }
 
     document.getElementById('orderForm').onsubmit = async (e) => {
@@ -611,13 +1007,18 @@
       document.querySelectorAll('.product-row').forEach(row => {
         const product_name = row.querySelector('.prod-select').value;
         const qty = row.querySelector('.prod-qty').value;
-        if (product_name) items.push({ product_name, qty });
+        const unit_price = row.querySelector('.prod-price').value;
+        const discount_percent = row.querySelector('.prod-discount').value || 0;
+        const hs_code = row.querySelector('.prod-hscode').value || '';
+        
+        if (product_name) items.push({ product_name, qty, unit_price, discount_percent, hs_code });
       });
 
       const payload = {
         customer_name: document.getElementById('name').value,
         phone_number: document.getElementById('phone').value,
         phone2: document.getElementById('phone2').value,
+        customer_pan: document.getElementById('customerPan').value,
         shipping_address: document.getElementById('address').value,
         items,
         cod_amount: document.getElementById('codAmount').value,
@@ -645,7 +1046,7 @@
       fetchInventory();
     };
 
-    // -- NCM DETAIL & COMMENTS MODAL LOGIC RESTORED --
+    // --- NCM DETAIL MODAL LOGIC ---
     async function openDetailModal(orderId) {
       activeOrderDetailId = orderId;
       const res = await authFetch(`/api/orders/${orderId}`);
@@ -659,6 +1060,7 @@
       document.getElementById('detail-cod').innerText = `Rs. ${order.cod_amount || 0}`;
       document.getElementById('detail-receiver').innerText = order.customer_name;
       document.getElementById('detail-phone').innerText = order.phone2 ? `${order.phone_number} / ${order.phone2}` : order.phone_number;
+      document.getElementById('detail-pan').innerText = order.customer_pan || 'None';
       document.getElementById('detail-address').innerText = order.shipping_address;
       document.getElementById('detail-delivery-type').innerText = order.delivery_type || 'Door2Door';
 
