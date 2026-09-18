@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const { Pool } = require('pg');
 const axios = require('axios');
@@ -44,7 +43,7 @@ function sanitizeText(text) {
   return str.length > 0 ? str : null;
 }
 
-// Database Migration Strategy (Non-destructive & Complete)
+// Database Migrations (Safe & Non-Destructive)
 pool.query(`
   CREATE TABLE IF NOT EXISTS inventory (
     id SERIAL PRIMARY KEY,
@@ -197,7 +196,7 @@ async function syncOrdersWithNCM() {
 setTimeout(syncOrdersWithNCM, 3000);
 setInterval(syncOrdersWithNCM, 10 * 60 * 1000);
 
-// --- INVENTORY ---
+// --- INVENTORY ROUTES ---
 app.get('/api/inventory', verifyAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM inventory ORDER BY product_name ASC');
@@ -249,7 +248,7 @@ app.delete('/api/inventory/:id', verifyAuth, async (req, res) => {
   }
 });
 
-// --- ORDERS ---
+// --- ORDERS ROUTES ---
 app.get('/api/branches', verifyAuth, async (req, res) => {
   try {
     const response = await axios.get('https://portal.nepalcanmove.com/api/v2/branches', {
@@ -417,7 +416,6 @@ app.put('/api/orders/:id', verifyAuth, async (req, res) => {
 
       await client.query('UPDATE inventory SET stock_quantity = stock_quantity - $1 WHERE id = $2', [reqQty, stockCheck.rows[0].id]);
       
-      // Preserve historical price/discount if provided explicitly; fallback to existing snapshot, then default_price
       const existingSnapshot = oldItems.find(oi => oi.product_name === pName);
       
       const unit_price = item.unit_price !== undefined && item.unit_price !== '' ? parseFloat(item.unit_price) : (existingSnapshot ? parseFloat(existingSnapshot.unit_price) : (parseFloat(stockCheck.rows[0].default_price) || 0));
@@ -567,7 +565,7 @@ app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
   }
 });
 
-// --- ANALYTICS ---
+// --- ANALYTICS ROUTES ---
 app.get('/api/analytics', verifyAuth, async (req, res) => {
   try {
     const totalOrdersRes = await pool.query('SELECT COUNT(*) FROM orders');
