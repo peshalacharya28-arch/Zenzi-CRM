@@ -160,6 +160,12 @@
       .bill-signature-line { border-top: 1px solid #000; width: 160px; text-align: center; padding-top: 4px; font-weight: bold; }
     }
   </style>
+  <div class="bill-header">
+  <div class="bill-logo-box">
+    ${stampImageHtml}
+  </div>
+  ...
+</div>
 </head>
 <body>
 
@@ -702,121 +708,12 @@
         panBoxesHtml += `<div class="pan-digit-box">${char}</div>`;
       }
 
-      // EXACT VECTOR REPRODUCTION OF YOUR CIRCULAR STAMP SEAL
-      const stampSvg = `
-        <svg viewBox="0 0 200 200" width="75" height="75" style="display: block;">
-          <circle cx="100" cy="100" r="96" fill="none" stroke="#000" stroke-width="3"/>
-          <circle cx="100" cy="100" r="91" fill="none" stroke="#000" stroke-width="1.5"/>
-          <circle cx="100" cy="100" r="58" fill="none" stroke="#000" stroke-width="2"/>
-          
-          <defs>
-            <path id="topArc" d="M 18,100 A 82,82 0 1,1 182,100" />
-            <path id="bottomArc" d="M 182,100 A 82,82 0 0,1 18,100" />
-          </defs>
-          
-          <text font-family="Arial, sans-serif" font-weight="900" font-size="21" fill="#000" letter-spacing="1">
-            <textPath href="#topArc" startOffset="50%" text-anchor="middle">ZENZI SHOP</textPath>
-          </text>
-          
-          <text x="24" y="106" font-size="16" fill="#000">★</text>
-          <text x="162" y="106" font-size="16" fill="#000">★</text>
-
-          <text font-family="Arial, sans-serif" font-weight="900" font-size="16.5" fill="#000" letter-spacing="0.5">
-            <textPath href="#bottomArc" startOffset="50%" text-anchor="middle">Kathmandu-15, Nepal</textPath>
-          </text>
-
-          <g transform="translate(100, 100)">
-            <text x="-32" y="-22" font-family="Arial, sans-serif" font-weight="900" font-size="13" fill="#000" letter-spacing="3" transform="rotate(-90 -32 -22)">ZENZI</text>
-            <path d="M-6,-32 L22,-32 L22,-20 L-2,12 L22,12 L22,26 L-22,26 L-22,14 L2,-18 L-22,-18 Z" fill="#000"/>
-          </g>
-        </svg>
-      `;
-
-      return `
-        <div class="bill-page">
-          <div class="bill-header">
-            <div class="bill-logo-box">
-              ${stampSvg}
-            </div>
-            <div class="bill-company-info">
-              <div class="bill-company-name">ZENZI SHOP PVT. LTD.</div>
-              <div class="bill-company-sub">Kathmandu-15, Nepal</div>
-              <div style="font-size: 11px; margin-top: 1px;">Contact No.: 9847623357 / 9845368724</div>
-            </div>
-            <div class="bill-header-right">
-              <div class="bill-pan-top">PAN No.: 623704035</div>
-              <div class="bill-no-box">Bill No.: ${String(order.bill_no || order.id).padStart(3, '0')}</div>
-              <div style="font-size: 11px; margin-top: 4px;">Date: ${formattedDate}</div>
-            </div>
-          </div>
-
-          <div class="bill-customer-section">
-            <div class="bill-field-row">
-              <div class="bill-field-label">Customer's Name:</div>
-              <div class="bill-field-dots">${escapeHTML(order.customer_name)}</div>
-            </div>
-            <div class="bill-field-row">
-              <div class="bill-field-label">Customer's Address:</div>
-              <div class="bill-field-dots">${escapeHTML(order.shipping_address)}</div>
-            </div>
-            <div class="bill-field-row">
-              <div class="bill-field-label">Customer's PAN No.:</div>
-              <div class="pan-boxes-container">${panBoxesHtml}</div>
-            </div>
-            <div class="bill-field-row">
-              <div class="bill-field-label">NCM Order ID:</div>
-              <div class="bill-field-dots">${escapeHTML(order.ncm_order_id || order.tracking_id || '')}</div>
-            </div>
-            <div class="bill-field-row">
-              <div class="bill-field-label">Contact No.:</div>
-              <div class="bill-field-dots">${escapeHTML(order.phone_number)}</div>
-            </div>
-          </div>
-
-          <table class="bill-table">
-            <thead>
-              <tr>
-                <th style="width: 6%;">S.N.</th>
-                <th style="width: 14%;">H.S. Code</th>
-                <th style="width: 44%;">Particulars</th>
-                <th style="width: 8%;">Qty.</th>
-                <th style="width: 13%;">Rate</th>
-                <th style="width: 15%;">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
-
-          <table class="bill-totals-table">
-            <tr>
-              <td rowspan="3" style="width: 65%; vertical-align: top; font-size: 11px;">
-                <strong>In words Rs:</strong> ${amountInWordsStr}
-              </td>
-              <td style="width: 18%; font-weight: bold; text-align: right;">Sub Total</td>
-              <td style="width: 17%; text-align: right; font-weight: bold;">${subtotal > 0 ? subtotal.toFixed(2) : ''}</td>
-            </tr>
-            <tr>
-              <td style="font-weight: bold; text-align: right;">% Discount</td>
-              <td style="text-align: right; font-weight: bold;">${totalDiscount > 0 ? totalDiscount.toFixed(2) : ''}</td>
-            </tr>
-            <tr>
-              <td style="font-weight: bold; text-align: right;">Grand TOTAL</td>
-              <td style="text-align: right; font-weight: bold;">${grandTotal > 0 ? grandTotal.toFixed(2) : ''}</td>
-            </tr>
-          </table>
-
-          <div class="bill-footer">
-            <div>
-              <div style="font-size: 11px; font-weight: bold;">* "भुलसुधार लिने दिने।"</div>
-            </div>
-            <div class="bill-signature-line">
-              Authorized Signature
-            </div>
-          </div>
-        </div>
-      `;
+     // Replace stampSvg inside generateBillHTML(order) with this:
+const stampImageHtml = `
+  <img src="data:image/jpeg;base64,YOUR_BASE64_STRING_HERE" 
+       alt="Zenzi Shop Stamp" 
+       style="width: 75px; height: 75px; object-fit: contain; display: block;" />
+`;
     }
 
     // --- PRINT & PREVIEW HANDLERS ---
