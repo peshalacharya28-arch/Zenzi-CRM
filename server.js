@@ -13,7 +13,7 @@ const { createClient } = require('@supabase/supabase-js');
 /* -------------------------------------------------------------------------- */
 /*  Configuration (no hardcoded secrets: the server refuses to start without)  */
 /* -------------------------------------------------------------------------- */
-const REQUIRED_ENV = ['NCM_TOKEN', 'postgresql://postgres:[abccba123321abccba]@db.pnecdxsqaevyvsnibdcu.supabase.co:5432/postgres', 'https://pnecdxsqaevyvsnibdcu.supabase.co', 'SUPABASE_ANON_KEY', 'ALLOWED_EMAILS', 'ADMIN_EMAILS'];
+const REQUIRED_ENV = ['6f33ba16bc5faf0902cc53ed920e78b75906b555', 'postgresql://postgres.pnecdxsqaevyvsnibdcu:abccba123321abccba@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres', 'https://pnecdxsqaevyvsnibdcu.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI', 'ALLOWED_EMAILS', 'ADMIN_EMAILS'];
 const missingEnv = REQUIRED_ENV.filter((k) => !process.env[k]);
 if (missingEnv.length) {
   throw new Error(`Missing required environment variables: ${missingEnv.join(', ')}`);
