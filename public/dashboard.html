@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Zenzi Shop — Operations Portal</title>
   <link rel="icon" type="image/png" href="/favicon.png?v=2">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -25,6 +25,7 @@
     }
     @media (min-width: 640px) { .btn-action { flex: initial; } }
     .btn-action:hover { background: #f1f5f9; }
+    .btn-action:disabled { opacity: .6; cursor: not-allowed; }
     .btn-primary { background: #0f172a; color: #fff; border: none; }
     .btn-primary:hover { background: #1e293b; }
     .btn-icon { border: 1px solid var(--border-color); background: #fff; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; min-height: 36px; }
@@ -60,11 +61,11 @@
     @media (min-width: 640px) { .modal-content { border-radius: 12px; max-height: 90vh; } }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; position: sticky; top: 0; background: #fff; z-index: 10; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); }
     .close-btn { background: none; border: none; font-size: 28px; cursor: pointer; color: var(--text-sub); padding: 6px; }
-    
+
     .product-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
     .product-row select { flex: 2; min-width: 130px; }
     .product-row input[type="number"] { flex: 1; min-width: 60px; }
-    
+
     form { display: grid; grid-template-columns: 1fr; gap: 12px; }
     @media (min-width: 640px) { form { grid-template-columns: repeat(2, 1fr); } }
     form input, form select { padding: 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 15px; outline: none; width: 100%; min-height: 48px; }
@@ -73,7 +74,7 @@
     .stock-ok { background: #dcfce7; color: #15803d; }
     .stock-low { background: #fee2e2; color: #b91c1c; }
     #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-    .toast { background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; opacity: 0; transform: translateY(-10px); transition: all 0.25s ease; pointer-events: auto; display: flex; align-items: center; gap: 8px; }
+    .toast { background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; opacity: 0; transform: translateY(-10px); transition: all 0.25s ease; pointer-events: auto; display: flex; align-items: center; gap: 8px; max-width: 360px; }
     .toast.show { opacity: 1; transform: translateY(0); }
     .toast-error { background: #dc2626; }
     .toast-success { background: #15803d; }
@@ -83,7 +84,7 @@
     @media (min-width: 768px) { .ncm-grid { grid-template-columns: repeat(3, 1fr); } }
     .ncm-card { background: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
     .ncm-card-title { font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--ncm-pink); letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
-    .ncm-data-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #f1f5f9; font-size: 12px; }
+    .ncm-data-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed #f1f5f9; font-size: 12px; }
     .ncm-data-label { color: var(--text-sub); font-weight: 500; }
     .ncm-data-value { font-weight: 700; color: var(--text-main); text-align: right; }
     .comment-item { background: #f8fafc; border: 1px solid var(--border-color); padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 12px; }
@@ -91,73 +92,39 @@
 
     .bulk-toolbar { display: flex; align-items: center; gap: 12px; background: #e0f2fe; border: 1px solid #bae6fd; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 600; color: #0369a1; flex-wrap: wrap; }
 
-    /* PRINTING STYLES FOR PHYSICAL BILL */
+    /* ---------- BILL STYLES (shared by on-screen preview and print) ---------- */
     #printContainer { display: none; }
 
+    .bill-page { width: 100%; max-width: 190mm; margin: 0 auto 16px; padding: 8mm; box-sizing: border-box; color: #000; background: #fff; border: 1.5px solid #000; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.35; }
+    .bill-header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 8px; }
+    .bill-logo-box { width: 75px; height: 75px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .bill-company-info { text-align: center; flex: 1; margin: 0 10px; }
+    .bill-company-name { font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: .5px; }
+    .bill-company-sub { font-size: 12px; font-weight: bold; margin-top: 1px; }
+    .bill-header-right { text-align: right; }
+    .bill-pan-top { font-weight: bold; font-size: 12px; margin-bottom: 6px; }
+    .bill-no-box { border: 1.5px solid #000; padding: 2px 8px; display: inline-block; font-weight: bold; font-size: 13px; margin-bottom: 4px; }
+    .bill-customer-section { margin-bottom: 10px; font-size: 12px; }
+    .bill-field-row { display: flex; margin-bottom: 5px; align-items: center; }
+    .bill-field-label { width: 140px; font-weight: bold; flex-shrink: 0; }
+    .bill-field-dots { flex: 1; border-bottom: 1px dotted #000; min-height: 15px; padding-left: 4px; font-weight: bold; }
+    .pan-boxes-container { display: flex; gap: 2px; margin-left: 4px; }
+    .pan-digit-box { width: 16px; height: 18px; border: 1px solid #000; text-align: center; font-size: 11px; font-weight: bold; line-height: 18px; }
+    .bill-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 12px; min-width: 0; }
+    .bill-table th, .bill-table td { border: 1px solid #000; padding: 5px; text-align: left; }
+    .bill-table th { font-weight: bold; text-transform: uppercase; font-size: 11px; text-align: center; color: #000; }
+    .bill-totals-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 0; }
+    .bill-totals-table td { border: 1px solid #000; padding: 4px 6px; }
+    .bill-footer { margin-top: 25px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 11px; }
+    .bill-signature-line { border-top: 1px solid #000; width: 160px; text-align: center; padding-top: 4px; font-weight: bold; }
+
     @media print {
-      @page {
-        size: A4 portrait;
-        margin: 8mm;
-      }
-      body * { visibility: hidden; }
-      #printContainer, #printContainer * { visibility: visible; }
-      #printContainer {
-        display: block !important;
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        margin: 0;
-        padding: 0;
-        background: transparent !important;
-        color: #000 !important;
-        font-family: Arial, sans-serif;
-      }
-      .bill-page {
-        width: 100%;
-        max-width: 190mm;
-        margin: 0 auto;
-        padding: 8mm;
-        box-sizing: border-box;
-        page-break-after: always;
-        page-break-inside: avoid;
-        color: #000 !important;
-        background: transparent !important;
-        border: 1.5px solid #000;
-        font-size: 12px;
-        line-height: 1.35;
-      }
-      .bill-page:last-child {
-        page-break-after: auto;
-      }
-      
-      .bill-header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 8px; }
-      .bill-logo-box { width: 75px; height: 75px; display: flex; align-items: center; justify-content: center; }
-      .bill-company-info { text-align: center; flex: 1; margin: 0 10px; }
-      .bill-company-name { font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; }
-      .bill-company-sub { font-size: 12px; font-weight: bold; margin-top: 1px; }
-      .bill-header-right { text-align: right; }
-      
-      .bill-pan-top { font-weight: bold; font-size: 12px; margin-bottom: 6px; }
-      .bill-no-box { border: 1.5px solid #000; padding: 2px 8px; display: inline-block; font-weight: bold; font-size: 13px; margin-bottom: 4px; }
-
-      .bill-customer-section { margin-bottom: 10px; font-size: 12px; }
-      .bill-field-row { display: flex; margin-bottom: 5px; align-items: center; }
-      .bill-field-label { width: 140px; font-weight: bold; }
-      .bill-field-dots { flex: 1; border-bottom: 1px dotted #000; height: 15px; padding-left: 4px; font-weight: bold; }
-      
-      .pan-boxes-container { display: flex; gap: 2px; margin-left: 4px; }
-      .pan-digit-box { width: 16px; height: 18px; border: 1px solid #000; text-align: center; font-size: 11px; font-weight: bold; line-height: 18px; }
-
-      .bill-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 12px; }
-      .bill-table th, .bill-table td { border: 1px solid #000; padding: 5px; text-align: left; }
-      .bill-table th { font-weight: bold; text-transform: uppercase; font-size: 11px; text-align: center; }
-      
-      .bill-totals-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      .bill-totals-table td { border: 1px solid #000; padding: 4px 6px; }
-
-      .bill-footer { margin-top: 25px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 11px; }
-      .bill-signature-line { border-top: 1px solid #000; width: 160px; text-align: center; padding-top: 4px; font-weight: bold; }
+      @page { size: A4 portrait; margin: 8mm; }
+      html, body { padding: 0 !important; margin: 0 !important; background: #fff !important; }
+      body > *:not(#printContainer) { display: none !important; }
+      #printContainer { display: block !important; }
+      .bill-page { margin: 0 auto; page-break-after: always; break-inside: avoid; }
+      .bill-page:last-child { page-break-after: auto; }
     }
   </style>
 </head>
@@ -246,14 +213,14 @@
         <input type="text" id="phone" placeholder="Primary Phone *" required>
         <input type="text" id="phone2" placeholder="Secondary Phone (Optional)">
         <input type="text" id="customerPan" placeholder="Customer PAN No. (Optional)">
-        
+
         <div class="full-width" style="border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; background: #fafafa;">
           <label style="font-size: 12px; font-weight: 700; color: var(--text-sub); display: block; margin-bottom: 8px;">PRODUCTS IN ORDER</label>
           <div id="productRowsContainer"></div>
           <button type="button" class="btn-action" style="font-size: 12px; padding: 8px 12px; margin-top: 4px;" onclick="addProductRow()">+ Add Another Item</button>
         </div>
 
-        <input type="number" id="codAmount" placeholder="Custom COD Amount (NPR) *" required step="0.01">
+        <input type="number" id="codAmount" placeholder="Custom COD Amount (NPR) *" required step="0.01" min="0">
         <input list="branchList" id="toBranch" placeholder="NCM Branch *" required>
         <datalist id="branchList"></datalist>
         <select id="deliveryType" class="full-width">
@@ -276,7 +243,7 @@
         <h3 style="margin: 0; font-size: 18px;">Stock Inventory Management</h3>
         <button class="close-btn" onclick="closeInventoryModal()">&times;</button>
       </div>
-      
+
       <form id="inventoryForm" style="margin-bottom: 16px; padding: 12px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 8px;">
         <input type="text" id="invProductName" placeholder="Product Name *" required>
         <input type="text" id="invSKU" placeholder="SKU Code (Optional)">
@@ -326,7 +293,7 @@
           <div style="font-size: 12px; margin-top: 6px; opacity: 0.8;" id="detail-route-time">KALANKI → NEWROAD</div>
         </div>
         <div style="display: flex; gap: 8px;">
-          <a id="ncm-native-link" href="https://portal.nepalcanmove.com/" target="_blank" class="btn-action" style="font-size: 12px; padding: 6px 12px; min-height: unset; text-decoration: none; background: #334155; color: #fff;">Native Portal ↗</a>
+          <a id="ncm-native-link" href="https://portal.nepalcanmove.com/" target="_blank" rel="noopener noreferrer" class="btn-action" style="font-size: 12px; padding: 6px 12px; min-height: unset; text-decoration: none; background: #334155; color: #fff;">Native Portal ↗</a>
           <button class="btn-action btn-primary" style="font-size: 12px; padding: 6px 12px; min-height: unset;" onclick="closeDetailModal()">Back to Directory</button>
         </div>
       </div>
@@ -364,7 +331,7 @@
               <button class="btn-action" style="font-size: 11px; padding: 2px 8px; min-height: unset;" onclick="toggleCommentInput()">+ Add Note</button>
             </div>
             <div id="comment-input-box" style="display: none; margin-bottom: 12px;">
-              <textarea id="newCommentText" style="width: 100%; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-size: 12px; outline: none;" rows="2" placeholder="Write internal or NCM rider note..."></textarea>
+              <textarea id="newCommentText" maxlength="1000" style="width: 100%; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-size: 12px; outline: none;" rows="2" placeholder="Write internal or NCM rider note..."></textarea>
               <button id="btnSubmitComment" class="btn-action btn-primary" style="font-size: 11px; padding: 6px 12px; margin-top: 4px; width: 100%;" onclick="submitComment()"><span>Post Note</span></button>
             </div>
             <div id="commentsContainer" style="max-height: 220px; overflow-y: auto;"></div>
@@ -390,7 +357,7 @@
         <h3 style="margin: 0; font-size: 18px;">Bill Preview</h3>
         <button class="close-btn" onclick="closeBillPreviewModal()">&times;</button>
       </div>
-      <div id="previewBillRenderArea" style="background: #fff; padding: 10px; border: 1px solid var(--border-color); max-height: 70vh; overflow-y: auto;"></div>
+      <div id="previewBillRenderArea" style="background: #f1f5f9; padding: 10px; border: 1px solid var(--border-color); max-height: 70vh; overflow-y: auto;"></div>
       <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
         <button class="btn-action" onclick="closeBillPreviewModal()">Close</button>
         <button class="btn-action btn-primary" onclick="triggerPrintFromPreview()">Print Bill(s)</button>
@@ -402,16 +369,25 @@
   <div id="printContainer"></div>
 
   <script>
+    /* ------------------------------------------------------------------ */
+    /*  Utilities                                                         */
+    /* ------------------------------------------------------------------ */
     function escapeHTML(str) {
-      if (!str) return '';
-      return String(str).replace(/[&<>'"]/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[match]));
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/[&<>'"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[m]));
     }
 
+    // Local (browser timezone) YYYY-MM-DD, avoids the UTC off-by-one from toISOString().
+    function localDate(d) {
+      const p = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    }
+
+    // Supabase public config (the anon key is designed to be public)
     const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
-    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true }});
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true } });
 
-    let currentAccessToken = "";
     let allOrders = [];
     let inventoryList = [];
     let currentFilter = 'all';
@@ -422,7 +398,13 @@
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
       toast.className = `toast ${type === 'error' ? 'toast-error' : 'toast-success'}`;
-      toast.innerHTML = `<span>${type === 'error' ? '⚠️' : '✅'}</span> <span>${message}</span>`;
+
+      const icon = document.createElement('span');
+      icon.textContent = type === 'error' ? '⚠️' : '✅';
+      const text = document.createElement('span');
+      text.textContent = message; // textContent: safe against injected HTML
+
+      toast.append(icon, text);
       container.appendChild(toast);
       setTimeout(() => toast.classList.add('show'), 10);
       setTimeout(() => {
@@ -432,66 +414,81 @@
     }
 
     async function authFetch(url, options = {}) {
-      if (!currentAccessToken) {
-        const sessionRes = await dbClient.auth.getSession();
-        currentAccessToken = sessionRes.data?.session?.access_token || "";
-      }
-      options.headers = { ...options.headers, 'Authorization': `Bearer ${currentAccessToken}`, 'Content-Type': 'application/json' };
+      // Always read the current session so refreshed tokens are used.
+      const { data } = await dbClient.auth.getSession();
+      const token = data && data.session ? data.session.access_token : '';
+      if (!token) { logout(); throw new Error('No active session'); }
+
+      options.headers = { ...options.headers, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
       const res = await fetch(url, options);
       if (res.status === 401 || res.status === 403) {
-        showToast("Session expired. Please log in again.", "error");
+        showToast('Session expired or access denied. Please log in again.', 'error');
         logout();
       }
       return res;
     }
 
+    async function readJson(res) {
+      try { return await res.json(); } catch (e) { return {}; }
+    }
+
     dbClient.auth.getSession().then(({ data: { session } }) => {
-      if (!session) window.location.href = '/index.html';
-      else { 
-        currentAccessToken = session.access_token; 
-        loadBranches();
-        fetchInventory(); 
-        fetchOrders(); 
-      }
+      if (!session) { window.location.href = '/index.html'; return; }
+      loadBranches();
+      fetchInventory();
+      fetchOrders();
     });
 
+    /* ------------------------------------------------------------------ */
+    /*  Orders list                                                       */
+    /* ------------------------------------------------------------------ */
     async function fetchOrders() {
       try {
         const res = await authFetch('/api/orders');
-        allOrders = await res.json();
+        const data = await readJson(res);
+        if (!res.ok || !Array.isArray(data)) throw new Error(data.error || 'Bad response');
+        allOrders = data;
+
+        // drop selections for orders that no longer exist
+        const ids = new Set(allOrders.map(o => o.id));
+        selectedOrderIds.forEach(id => { if (!ids.has(id)) selectedOrderIds.delete(id); });
+
         updateMetrics();
         renderTable();
-      } catch (err) { showToast("Failed to load orders", "error"); }
+      } catch (err) { showToast('Failed to load orders', 'error'); }
     }
 
     function updateMetrics() {
+      const count = s => allOrders.filter(o => o.status === s).length;
       document.getElementById('count-total').innerText = allOrders.length;
-      document.getElementById('count-packed').innerText = allOrders.filter(o => o.status === 'packed').length;
-      document.getElementById('count-processing').innerText = allOrders.filter(o => o.status === 'processing').length;
-      document.getElementById('count-problem').innerText = allOrders.filter(o => o.status === 'problem').length;
-      document.getElementById('count-delivered').innerText = allOrders.filter(o => o.status === 'delivered').length;
+      document.getElementById('count-packed').innerText = count('packed');
+      document.getElementById('count-processing').innerText = count('processing');
+      document.getElementById('count-problem').innerText = count('problem');
+      document.getElementById('count-delivered').innerText = count('delivered');
     }
 
     async function fetchInventory() {
       try {
         const res = await authFetch('/api/inventory');
-        inventoryList = await res.json();
+        const data = await readJson(res);
+        if (!res.ok || !Array.isArray(data)) throw new Error(data.error || 'Bad response');
+        inventoryList = data;
         renderInventoryTable();
-      } catch (err) { showToast("Failed to load inventory", "error"); }
+      } catch (err) { showToast('Failed to load inventory', 'error'); }
     }
 
     async function loadBranches() {
       try {
         const res = await authFetch('/api/branches');
-        const branches = await res.json();
+        const branches = await readJson(res);
         const datalist = document.getElementById('branchList');
         datalist.innerHTML = '';
-        branches.forEach(b => {
+        (Array.isArray(branches) ? branches : []).forEach(b => {
           const opt = document.createElement('option');
           opt.value = b;
           datalist.appendChild(opt);
         });
-      } catch (err) {}
+      } catch (err) { /* datalist is optional */ }
     }
 
     function filterTab(status, element) {
@@ -501,19 +498,23 @@
       renderTable();
     }
 
-    function renderTable() {
-      const tbody = document.getElementById('ordersTableBody');
+    function getFilteredOrders() {
       const search = document.getElementById('searchInput').value.trim().toLowerCase();
-      tbody.innerHTML = '';
-      
-      const filtered = allOrders.filter(o => {
+      return allOrders.filter(o => {
         const matchesTab = currentFilter === 'all' || o.status === currentFilter;
         const searchStr = [o.customer_name, o.phone_number, o.phone2, o.shipping_address, o.package_name, o.to_branch, o.tracking_id, o.vref_id, o.customer_pan].join(' ').toLowerCase();
         return matchesTab && (search === '' || searchStr.includes(search));
       });
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('ordersTableBody');
+      tbody.innerHTML = '';
+      const filtered = getFilteredOrders();
 
       if (filtered.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--text-sub); padding:32px;">No orders found.</td></tr>`;
+        updateBulkToolbarUI();
         return;
       }
 
@@ -527,7 +528,7 @@
 
         const selectHtml = `
           <select class="status-select" onchange="updateOrderStatus(${o.id}, this.value)">
-            <option value="received" ${o.status === 'received' ? 'selected' : ''}>Received</option>
+            <option value="received" ${o.status === 'received' ? 'selected' : ''} ${hasTracking ? 'disabled' : ''}>Received</option>
             <option value="packed" ${o.status === 'packed' ? 'selected' : ''} ${!canEdit && !hasTracking ? 'disabled' : ''}>Packed (Fires API)</option>
             <option value="processing" ${o.status === 'processing' ? 'selected' : ''} ${!hasTracking ? 'disabled' : ''}>Processing</option>
             <option value="hold" ${o.status === 'hold' ? 'selected' : ''}>Hold</option>
@@ -550,14 +551,14 @@
             <span class="cust-name">${escapeHTML(o.package_name || 'N/A')}</span>
             <span class="cust-sub">${o.instruction ? 'Note: ' + escapeHTML(o.instruction) : ''}</span>
           </td>
-          <td><strong>NPR ${o.cod_amount || 0}</strong></td>
+          <td><strong>NPR ${escapeHTML(o.cod_amount || 0)}</strong></td>
           <td>
             <span class="cust-name">${escapeHTML(o.to_branch || 'KALANKI')}</span>
             <span class="cust-sub">${escapeHTML(o.delivery_type || 'Door2Door')}</span>
           </td>
           <td>
             ${selectHtml}
-            <span class="cust-sub" style="margin-top:4px;">${trackingText}</span>
+            <span class="cust-sub" style="margin-top:4px;">${escapeHTML(trackingText)}</span>
           </td>
           <td>
             <div style="display:flex; gap:6px;">
@@ -574,7 +575,9 @@
       updateBulkToolbarUI();
     }
 
-    // --- BULK SELECTION MECHANICS ---
+    /* ------------------------------------------------------------------ */
+    /*  Bulk selection                                                    */
+    /* ------------------------------------------------------------------ */
     function toggleSelectOrder(id, isSelected) {
       if (isSelected) selectedOrderIds.add(id);
       else selectedOrderIds.delete(id);
@@ -582,18 +585,10 @@
     }
 
     function toggleSelectAllRows(isSelected) {
-      const search = document.getElementById('searchInput').value.trim().toLowerCase();
-      const filtered = allOrders.filter(o => {
-        const matchesTab = currentFilter === 'all' || o.status === currentFilter;
-        const searchStr = [o.customer_name, o.phone_number, o.phone2, o.shipping_address, o.package_name, o.to_branch, o.tracking_id, o.vref_id, o.customer_pan].join(' ').toLowerCase();
-        return matchesTab && (search === '' || searchStr.includes(search));
-      });
-
-      filtered.forEach(o => {
+      getFilteredOrders().forEach(o => {
         if (isSelected) selectedOrderIds.add(o.id);
         else selectedOrderIds.delete(o.id);
       });
-
       renderTable();
     }
 
@@ -609,60 +604,83 @@
     }
 
     function updateBulkToolbarUI() {
-      const count = selectedOrderIds.size;
-      document.getElementById('selectedCountText').innerText = `${count} Orders Selected`;
+      const n = selectedOrderIds.size;
+      document.getElementById('selectedCountText').innerText = `${n} ${n === 1 ? 'Order' : 'Orders'} Selected`;
     }
 
-    // --- NUMBER TO WORDS ENGINE ---
+    /* ------------------------------------------------------------------ */
+    /*  Number to words (Nepali/Indian numbering)                         */
+    /* ------------------------------------------------------------------ */
     function numberToWords(num) {
-      if (num === null || num === undefined || isNaN(num) || num === 0) return "Zero Rupees Only";
-      
+      if (num === null || num === undefined || isNaN(num) || num === 0) return 'Zero Rupees Only';
+
       const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
       const b = ['', '', 'Twenty ', 'Thirty ', 'Forty ', 'Fifty ', 'Sixty ', 'Seventy ', 'Eighty ', 'Ninety '];
 
       function inWords(n) {
         if ((n = n.toString()).length > 9) return 'overflow';
-        let n_array = ('000000000' + n).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-        if (!n_array) return ''; 
+        const arr = ('000000000' + n).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+        if (!arr) return '';
+        const two = s => a[Number(s)] || (b[s[0]] + a[s[1]]);
         let str = '';
-        str += (n_array[1] != 0) ? (a[Number(n_array[1])] || b[n_array[1][0]] + a[n_array[1][1]]) + 'Crore ' : '';
-        str += (n_array[2] != 0) ? (a[Number(n_array[2])] || b[n_array[2][0]] + a[n_array[2][1]]) + 'Lakh ' : '';
-        str += (n_array[3] != 0) ? (a[Number(n_array[3])] || b[n_array[3][0]] + a[n_array[3][1]]) + 'Thousand ' : '';
-        str += (n_array[4] != 0) ? (a[Number(n_array[4])] || b[n_array[4][0]] + a[n_array[4][1]]) + 'Hundred ' : '';
-        str += (n_array[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n_array[5])] || b[n_array[5][0]] + a[n_array[5][1]]) : '';
+        str += Number(arr[1]) !== 0 ? two(arr[1]) + 'Crore ' : '';
+        str += Number(arr[2]) !== 0 ? two(arr[2]) + 'Lakh ' : '';
+        str += Number(arr[3]) !== 0 ? two(arr[3]) + 'Thousand ' : '';
+        str += Number(arr[4]) !== 0 ? a[Number(arr[4])] + 'Hundred ' : '';
+        str += Number(arr[5]) !== 0 ? (str !== '' ? 'and ' : '') + two(arr[5]) : '';
         return str;
       }
 
       const parts = Number(num).toFixed(2).split('.');
-      let rupees = inWords(parseInt(parts[0]));
-      let result = rupees ? rupees.trim() + " Rupees" : "";
+      const rupees = inWords(parseInt(parts[0], 10));
+      let result = rupees ? rupees.trim() + ' Rupees' : '';
 
-      if (parts[1] && parseInt(parts[1]) > 0) {
-        let paisa = inWords(parseInt(parts[1]));
-        if (paisa) result += " and " + paisa.trim() + " Paisa";
+      if (parts[1] && parseInt(parts[1], 10) > 0) {
+        const paisa = inWords(parseInt(parts[1], 10));
+        if (paisa) result += ' and ' + paisa.trim() + ' Paisa';
       }
-
-      return result ? result + " Only" : "Zero Rupees Only";
+      return result ? result + ' Only' : 'Zero Rupees Only';
     }
 
-    // --- EXACT PHYSICAL BILL TEMPLATE WITH EMBEDDED BASE64 STAMP SEAL ---
+    /* ------------------------------------------------------------------ */
+    /*  Bill template                                                     */
+    /* ------------------------------------------------------------------ */
+    // Kept as readable SVG source; the browser encodes it. No hand-built base64.
+    const STAMP_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 200" width="150" height="150">
+  <defs>
+    <path id="topArc" d="M 34,100 A 66,66 0 0,1 166,100"/>
+    <path id="botArc" d="M 20,100 A 80,80 0 0,0 180,100"/>
+  </defs>
+  <circle cx="100" cy="100" r="96" fill="none" stroke="#000" stroke-width="3"/>
+  <circle cx="100" cy="100" r="90" fill="none" stroke="#000" stroke-width="1.5"/>
+  <circle cx="100" cy="100" r="50" fill="none" stroke="#000" stroke-width="2"/>
+  <text font-family="Arial, sans-serif" font-weight="900" font-size="20" letter-spacing="1" fill="#000">
+    <textPath href="#topArc" xlink:href="#topArc" startOffset="50%" text-anchor="middle">ZENZI SHOP</textPath>
+  </text>
+  <text font-family="Arial, sans-serif" font-weight="900" font-size="15" fill="#000">
+    <textPath href="#botArc" xlink:href="#botArc" startOffset="50%" text-anchor="middle">Kathmandu-15, Nepal</textPath>
+  </text>
+  <circle cx="28" cy="100" r="3" fill="#000"/>
+  <circle cx="172" cy="100" r="3" fill="#000"/>
+  <text x="100" y="108" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900" font-size="22" fill="#000">ZENZI</text>
+</svg>`;
+    const STAMP_SRC = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(STAMP_SVG);
+
     function generateBillHTML(order) {
       const items = Array.isArray(order.items) ? order.items : [];
       let subtotal = 0;
       let totalDiscount = 0;
-
       let rowsHtml = '';
-      
+
       items.forEach((item, index) => {
-        const qty = parseInt(item.qty) || 1;
+        const qty = parseInt(item.qty, 10) || 1;
         const rate = parseFloat(item.unit_price) || 0;
         const discountPct = parseFloat(item.discount_percent) || 0;
-        
+
         const lineTotal = qty * rate;
-        const lineDiscount = lineTotal * (discountPct / 100);
-        
         subtotal += lineTotal;
-        totalDiscount += lineDiscount;
+        totalDiscount += lineTotal * (discountPct / 100);
 
         rowsHtml += `
           <tr>
@@ -672,44 +690,30 @@
             <td style="text-align: center;">${qty}</td>
             <td style="text-align: right;">${rate > 0 ? rate.toFixed(2) : ''}</td>
             <td style="text-align: right;">${lineTotal > 0 ? lineTotal.toFixed(2) : ''}</td>
-          </tr>
-        `;
+          </tr>`;
       });
 
-      // Pad exactly to 8 table rows to match physical paper dimensions
-      const padCount = Math.max(0, 8 - items.length);
-      for (let i = 0; i < padCount; i++) {
-        rowsHtml += `
-          <tr>
-            <td style="text-align: center;">&nbsp;</td>
-            <td>&nbsp;</td>
-            <td>&nbsp;</td>
-            <td>&nbsp;</td>
-            <td>&nbsp;</td>
-            <td>&nbsp;</td>
-          </tr>
-        `;
+      // Pad to 8 rows to match the physical paper layout
+      for (let i = 0; i < Math.max(0, 8 - items.length); i++) {
+        rowsHtml += `<tr><td style="text-align:center;">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>`;
       }
 
       const grandTotal = subtotal - totalDiscount;
-      const amountInWordsStr = numberToWords(grandTotal);
-      const formattedDate = order.created_at ? new Date(order.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-      const panStr = String(order.customer_pan || '').padStart(9, ' ');
-      
+      const formattedDate = localDate(order.created_at ? new Date(order.created_at) : new Date());
+
+      // PAN boxes: left-aligned, max 9 characters
+      const panStr = String(order.customer_pan || '').replace(/\s/g, '').padEnd(9, ' ');
       let panBoxesHtml = '';
       for (let i = 0; i < 9; i++) {
-        const char = panStr[i] && panStr[i] !== ' ' ? panStr[i] : '&nbsp;';
-        panBoxesHtml += `<div class="pan-digit-box">${char}</div>`;
+        const ch = panStr[i] && panStr[i] !== ' ' ? escapeHTML(panStr[i]) : '&nbsp;';
+        panBoxesHtml += `<div class="pan-digit-box">${ch}</div>`;
       }
-
-      // FULLY VALIDATED BASE64 CIRCULAR STAMP SEAL
-      const stampBase64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIiB3aWR0aD0iNzUiIGhlaWdodD0iNzUiPjxjaXJjbGUgY3g9IjEwMCIgY3k9IjEwMCIgcj0iOTYiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSIzLz48Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMDAiIHI9IjkxIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMS41Ii8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iMTAwIiByPSI1OCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIiLz48ZGVmcz48cGF0aCBpZD0idG9wQXJjIiBkPSJNIDE4LDEwMCBBIDgyLDgyIDAgMSwxIDE4MiwxMDAiLz48cGF0aCBpZD0iYm90dG9tQXJjIiBkPSJNIDE4MiwxMDAgQSA4Miw4MiAwIDAsMSAxOCwxMDAiLz48L2RlZnM+PHRleHQgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjIxIiBmaWxsPSIjMDAwIiBsZXR0ZXItc3BhY2luZz0iMSI+PHRleHRQYXRoIGhyZWY9IiN0b3BBcmMiIHN0YXJ0T2Zmc2V0PSI1MCUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlpFTlpJIFNIT1A8L3RleHRQYXRoPjwvdGV4dD48dGV4dCB4PSIyNCIgeT0iMTA2IiBmb250LXNpemU9IjE2IiBmaWxsPSIjMDAwIj7imLU8L3RleHQ+PHRleHQgeD0iMTYyIiB5PSIxMDYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMwMDAiPuKYtTwvdGV4dD48dGV4dCBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI5MDAiIGZvbnQtc2l6ZT0iMTYuNSIgZmlsbD0iIzAwMCIgbGV0dGVyLXNwYWNpbmc9IjAuNSI+PHRleHRQYXRoIGhyZWY9IiNib3R0b21BcmMiIHN0YXJ0T2Zmc2V0PSI1MCUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkthdGhtYW5kdS0xNSwgTmVwYWw8L3RleHRQYXRoPjwvdGV4dD48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxMDAsIDEwMCkiPjx0ZXh0IHg9Ii0zMiIgeT0iLTIyIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI5MDAiIGZvbnQtc2l6ZT0iMTMiIGZpbGw9IiMwMDAiIGxldHRlci1zcGFjaW5nPSIzIiB0cmFuc2Zvcm09InJvdGF0ZSgtOTAgLTMyIC0yMikiPlpFTlpJPC90ZXh0PjxwYXRoIGQ9Ik0tNiwtMzIgTDIyLC0zMiBMMjIsLTIw LTIsMTIgTDIyLDEyIEwyMiwyNiBMLTIyLDI2IEwtMjIsMTQgTDIsLTE4IEwtMjIsLTE4IFoiIGZpbGw9IiMwMDAiLz48L2c+PC9zdmc+";
 
       return `
         <div class="bill-page">
           <div class="bill-header">
             <div class="bill-logo-box">
-              <img src="${stampBase64}" width="75" height="75" style="display:block;" alt="Zenzi Shop Stamp" />
+              <img src="${STAMP_SRC}" width="75" height="75" style="display:block;" alt="Zenzi Shop Stamp" />
             </div>
             <div class="bill-company-info">
               <div class="bill-company-name">ZENZI SHOP PVT. LTD.</div>
@@ -718,32 +722,17 @@
             </div>
             <div class="bill-header-right">
               <div class="bill-pan-top">PAN No.: 623704035</div>
-              <div class="bill-no-box">Bill No.: ${String(order.bill_no || order.id).padStart(3, '0')}</div>
+              <div class="bill-no-box">Bill No.: ${escapeHTML(String(order.bill_no || order.id).padStart(3, '0'))}</div>
               <div style="font-size: 11px; margin-top: 4px;">Date: ${formattedDate}</div>
             </div>
           </div>
 
           <div class="bill-customer-section">
-            <div class="bill-field-row">
-              <div class="bill-field-label">Customer's Name:</div>
-              <div class="bill-field-dots">${escapeHTML(order.customer_name)}</div>
-            </div>
-            <div class="bill-field-row">
-              <div class="bill-field-label">Customer's Address:</div>
-              <div class="bill-field-dots">${escapeHTML(order.shipping_address)}</div>
-            </div>
-            <div class="bill-field-row">
-              <div class="bill-field-label">Customer's PAN No.:</div>
-              <div class="pan-boxes-container">${panBoxesHtml}</div>
-            </div>
-            <div class="bill-field-row">
-              <div class="bill-field-label">NCM Order ID:</div>
-              <div class="bill-field-dots">${escapeHTML(order.ncm_order_id || order.tracking_id || '')}</div>
-            </div>
-            <div class="bill-field-row">
-              <div class="bill-field-label">Contact No.:</div>
-              <div class="bill-field-dots">${escapeHTML(order.phone_number)}</div>
-            </div>
+            <div class="bill-field-row"><div class="bill-field-label">Customer's Name:</div><div class="bill-field-dots">${escapeHTML(order.customer_name)}</div></div>
+            <div class="bill-field-row"><div class="bill-field-label">Customer's Address:</div><div class="bill-field-dots">${escapeHTML(order.shipping_address)}</div></div>
+            <div class="bill-field-row"><div class="bill-field-label">Customer's PAN No.:</div><div class="pan-boxes-container">${panBoxesHtml}</div></div>
+            <div class="bill-field-row"><div class="bill-field-label">NCM Order ID:</div><div class="bill-field-dots">${escapeHTML(order.ncm_order_id || order.tracking_id || '')}</div></div>
+            <div class="bill-field-row"><div class="bill-field-label">Contact No.:</div><div class="bill-field-dots">${escapeHTML(order.phone_number)}</div></div>
           </div>
 
           <table class="bill-table">
@@ -757,21 +746,19 @@
                 <th style="width: 15%;">Amount</th>
               </tr>
             </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
+            <tbody>${rowsHtml}</tbody>
           </table>
 
           <table class="bill-totals-table">
             <tr>
               <td rowspan="3" style="width: 65%; vertical-align: top; font-size: 11px;">
-                <strong>In words Rs:</strong> ${amountInWordsStr}
+                <strong>In words Rs:</strong> ${escapeHTML(numberToWords(grandTotal))}
               </td>
               <td style="width: 18%; font-weight: bold; text-align: right;">Sub Total</td>
               <td style="width: 17%; text-align: right; font-weight: bold;">${subtotal > 0 ? subtotal.toFixed(2) : ''}</td>
             </tr>
             <tr>
-              <td style="font-weight: bold; text-align: right;">% Discount</td>
+              <td style="font-weight: bold; text-align: right;">Discount</td>
               <td style="text-align: right; font-weight: bold;">${totalDiscount > 0 ? totalDiscount.toFixed(2) : ''}</td>
             </tr>
             <tr>
@@ -781,54 +768,46 @@
           </table>
 
           <div class="bill-footer">
-            <div>
-              <div style="font-size: 11px; font-weight: bold;">* "भुलसुधार लिने दिने।"</div>
-            </div>
-            <div class="bill-signature-line">
-              Authorized Signature
-            </div>
+            <div><div style="font-size: 11px; font-weight: bold;">* "भुलसुधार लिने दिने।"</div></div>
+            <div class="bill-signature-line">Authorized Signature</div>
           </div>
-        </div>
-      `;
+        </div>`;
     }
 
-    // --- PRINT & PREVIEW HANDLERS ---
+    /* ------------------------------------------------------------------ */
+    /*  Print & preview                                                   */
+    /* ------------------------------------------------------------------ */
+    // Waits for images (the stamp) to decode before opening the print dialog.
+    function printHTML(html) {
+      const c = document.getElementById('printContainer');
+      c.innerHTML = html;
+      const imgs = [...c.querySelectorAll('img')];
+      Promise.all(imgs.map(i => (i.decode ? i.decode().catch(() => {}) : Promise.resolve())))
+        .then(() => window.print());
+    }
+    window.addEventListener('afterprint', () => { document.getElementById('printContainer').innerHTML = ''; });
+
     function singlePrintBill(id) {
       const order = allOrders.find(o => o.id === id);
-      if (!order) return showToast("Order not found", "error");
+      if (!order) return showToast('Order not found', 'error');
+      printHTML(generateBillHTML(order));
+    }
 
-      const printContainer = document.getElementById('printContainer');
-      printContainer.innerHTML = generateBillHTML(order);
-      window.print();
+    function buildSelectedBillsHTML() {
+      let html = '';
+      // keep table order (newest first) rather than selection order
+      allOrders.forEach(o => { if (selectedOrderIds.has(o.id)) html += generateBillHTML(o); });
+      return html;
     }
 
     function printSelectedBills() {
-      if (selectedOrderIds.size === 0) return showToast("No orders selected for printing", "error");
-
-      const printContainer = document.getElementById('printContainer');
-      let combinedHtml = '';
-
-      selectedOrderIds.forEach(id => {
-        const order = allOrders.find(o => o.id === id);
-        if (order) combinedHtml += generateBillHTML(order);
-      });
-
-      printContainer.innerHTML = combinedHtml;
-      window.print();
+      if (selectedOrderIds.size === 0) return showToast('No orders selected for printing', 'error');
+      printHTML(buildSelectedBillsHTML());
     }
 
     function previewSelectedBills() {
-      if (selectedOrderIds.size === 0) return showToast("No orders selected for preview", "error");
-
-      const renderArea = document.getElementById('previewBillRenderArea');
-      let combinedHtml = '';
-
-      selectedOrderIds.forEach(id => {
-        const order = allOrders.find(o => o.id === id);
-        if (order) combinedHtml += generateBillHTML(order);
-      });
-
-      renderArea.innerHTML = combinedHtml;
+      if (selectedOrderIds.size === 0) return showToast('No orders selected for preview', 'error');
+      document.getElementById('previewBillRenderArea').innerHTML = buildSelectedBillsHTML();
       document.getElementById('billPreviewModal').classList.add('active');
     }
 
@@ -837,25 +816,27 @@
     }
 
     function triggerPrintFromPreview() {
-      const renderArea = document.getElementById('previewBillRenderArea');
-      const printContainer = document.getElementById('printContainer');
-      printContainer.innerHTML = renderArea.innerHTML;
+      const html = document.getElementById('previewBillRenderArea').innerHTML;
       closeBillPreviewModal();
-      window.print();
+      printHTML(html);
     }
 
+    /* ------------------------------------------------------------------ */
+    /*  Status updates                                                    */
+    /* ------------------------------------------------------------------ */
     async function updateOrderStatus(id, newStatus) {
-      const res = await authFetch(`/api/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: newStatus }) });
-      const data = await res.json();
-      if (!res.ok) {
-        showToast(data.error || "Status update failed", "error");
-      } else {
-        showToast(`Order status updated to "${newStatus}"!`);
-      }
+      try {
+        const res = await authFetch(`/api/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: newStatus }) });
+        const data = await readJson(res);
+        if (!res.ok) showToast(data.details ? `${data.error}: ${data.details}` : (data.error || 'Status update failed'), 'error');
+        else showToast(`Order status updated to "${newStatus}"!`);
+      } catch (err) { /* authFetch already handled auth errors */ }
       fetchOrders();
     }
 
-    // --- INVENTORY UI LOGIC ---
+    /* ------------------------------------------------------------------ */
+    /*  Inventory UI                                                      */
+    /* ------------------------------------------------------------------ */
     function openInventoryModal() { fetchInventory(); document.getElementById('inventoryModal').classList.add('active'); }
     function closeInventoryModal() { document.getElementById('inventoryModal').classList.remove('active'); }
 
@@ -864,11 +845,11 @@
       const search = (document.getElementById('invSearchInput').value || '').trim().toLowerCase();
       tbody.innerHTML = '';
 
-      const filtered = inventoryList.filter(item => {
-        return (item.product_name || '').toLowerCase().includes(search) || 
-               (item.sku || '').toLowerCase().includes(search) ||
-               (item.hs_code || '').toLowerCase().includes(search);
-      });
+      const filtered = inventoryList.filter(item =>
+        (item.product_name || '').toLowerCase().includes(search) ||
+        (item.sku || '').toLowerCase().includes(search) ||
+        (item.hs_code || '').toLowerCase().includes(search)
+      );
 
       if (filtered.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--text-sub);">No inventory items match search.</td></tr>`;
@@ -882,8 +863,8 @@
           <td><strong>${escapeHTML(item.product_name)}</strong></td>
           <td>${escapeHTML(item.sku) || '-'}</td>
           <td>${escapeHTML(item.hs_code) || '-'}</td>
-          <td>NPR ${item.default_price || 0}</td>
-          <td><span class="badge-stock ${isLow ? 'stock-low' : 'stock-ok'}">${item.stock_quantity} available</span></td>
+          <td>NPR ${escapeHTML(item.default_price || 0)}</td>
+          <td><span class="badge-stock ${isLow ? 'stock-low' : 'stock-ok'}">${escapeHTML(item.stock_quantity)} available</span></td>
           <td>
             <button class="btn-action" style="padding:4px 10px; min-height:36px;" onclick="adjustStock(${item.id}, 1)">+1</button>
             <button class="btn-action" style="padding:4px 10px; min-height:36px;" onclick="adjustStock(${item.id}, -1)">-1</button>
@@ -896,45 +877,54 @@
 
     document.getElementById('inventoryForm').onsubmit = async (e) => {
       e.preventDefault();
-      const res = await authFetch('/api/inventory', {
-        method: 'POST',
-        body: JSON.stringify({
-          product_name: document.getElementById('invProductName').value.trim(),
-          sku: document.getElementById('invSKU').value.trim(),
-          hs_code: document.getElementById('invHSCode').value.trim(),
-          default_price: document.getElementById('invDefaultPrice').value,
-          stock_quantity: document.getElementById('invStock').value
-        })
-      });
-      if (res.ok) {
-        showToast("Inventory product saved!");
-        document.getElementById('inventoryForm').reset();
-        await fetchInventory();
-      } else {
-        showToast("Failed to save inventory product.", "error");
-      }
+      const btn = document.getElementById('btnSubmitInventory');
+      btn.disabled = true;
+      try {
+        const res = await authFetch('/api/inventory', {
+          method: 'POST',
+          body: JSON.stringify({
+            product_name: document.getElementById('invProductName').value.trim(),
+            sku: document.getElementById('invSKU').value.trim(),
+            hs_code: document.getElementById('invHSCode').value.trim(),
+            default_price: document.getElementById('invDefaultPrice').value,
+            stock_quantity: document.getElementById('invStock').value
+          })
+        });
+        if (res.ok) {
+          showToast('Inventory product saved!');
+          document.getElementById('inventoryForm').reset();
+          await fetchInventory();
+        } else {
+          const data = await readJson(res);
+          showToast(data.error || 'Failed to save inventory product.', 'error');
+        }
+      } finally { btn.disabled = false; }
     };
 
     async function adjustStock(id, adjustment) {
-      await authFetch(`/api/inventory/${id}/stock`, { method: 'PATCH', body: JSON.stringify({ adjustment }) });
-      showToast(`Stock updated (${adjustment > 0 ? '+' : ''}${adjustment})`);
+      const res = await authFetch(`/api/inventory/${id}/stock`, { method: 'PATCH', body: JSON.stringify({ adjustment }) });
+      if (res.ok) showToast(`Stock updated (${adjustment > 0 ? '+' : ''}${adjustment})`);
+      else showToast('Failed to adjust stock', 'error');
       await fetchInventory();
     }
 
     async function deleteInventoryItem(id) {
       if (!confirm('Delete this product from inventory?')) return;
-      await authFetch(`/api/inventory/${id}`, { method: 'DELETE' });
-      showToast("Product deleted from inventory");
+      const res = await authFetch(`/api/inventory/${id}`, { method: 'DELETE' });
+      if (res.ok) showToast('Product deleted from inventory');
+      else showToast('Failed to delete product', 'error');
       await fetchInventory();
     }
 
-    // --- ORDER ENTRY UI ---
+    /* ------------------------------------------------------------------ */
+    /*  Order entry UI                                                    */
+    /* ------------------------------------------------------------------ */
     function openOrderModal(editOrderId = null) {
       document.getElementById('productRowsContainer').innerHTML = '';
       document.getElementById('editingOrderId').value = editOrderId || '';
-      
+
       if (editOrderId) {
-        document.getElementById('orderModalTitle').innerText = "Edit Order (#" + editOrderId + ")";
+        document.getElementById('orderModalTitle').innerText = 'Edit Order (#' + editOrderId + ')';
         const order = allOrders.find(o => o.id === editOrderId);
         if (order) {
           document.getElementById('name').value = order.customer_name || '';
@@ -954,7 +944,7 @@
           }
         }
       } else {
-        document.getElementById('orderModalTitle').innerText = "Create New Order";
+        document.getElementById('orderModalTitle').innerText = 'Create New Order';
         document.getElementById('orderForm').reset();
         addProductRow();
       }
@@ -973,59 +963,64 @@
       row.className = 'product-row';
 
       let options = inventoryList.map(item => {
-        const isSelected = item.product_name === selectedProd ? 'selected' : '';
-        return `<option value="${escapeHTML(item.product_name)}" data-price="${item.default_price || 0}" data-hscode="${escapeHTML(item.hs_code || '')}" ${isSelected}>${escapeHTML(item.product_name)} (${item.stock_quantity} in stock)</option>`;
+        const sel = item.product_name === selectedProd ? 'selected' : '';
+        return `<option value="${escapeHTML(item.product_name)}" data-price="${escapeHTML(item.default_price || 0)}" data-hscode="${escapeHTML(item.hs_code || '')}" ${sel}>${escapeHTML(item.product_name)} (${escapeHTML(item.stock_quantity)} in stock)</option>`;
       }).join('');
+
+      // Product removed from inventory since the order was created: keep it visible.
+      if (selectedProd && !inventoryList.some(i => i.product_name === selectedProd)) {
+        options += `<option value="${escapeHTML(selectedProd)}" selected>${escapeHTML(selectedProd)} (not in inventory)</option>`;
+      }
 
       row.innerHTML = `
         <select class="prod-select" onchange="onProductSelectChange(this)" required>
           <option value="" disabled ${!selectedProd ? 'selected' : ''}>Select Product...</option>
           ${options}
         </select>
-        <input type="number" class="prod-qty" value="${qty}" min="1" placeholder="Qty *" required>
-        <input type="number" class="prod-price" value="${unitPrice}" step="0.01" min="0" placeholder="Rate (NPR) *" required>
-        <input type="number" class="prod-discount" value="${discountPercent !== undefined ? discountPercent : 0}" step="0.01" min="0" max="100" placeholder="Disc %">
-        <input type="hidden" class="prod-hscode" value="${hsCode}">
+        <input type="number" class="prod-qty" value="${escapeHTML(qty)}" min="1" step="1" placeholder="Qty *" required>
+        <input type="number" class="prod-price" value="${escapeHTML(unitPrice)}" step="0.01" min="0" placeholder="Rate (NPR) *" required>
+        <input type="number" class="prod-discount" value="${escapeHTML(discountPercent !== undefined ? discountPercent : 0)}" step="0.01" min="0" max="100" placeholder="Disc %">
+        <input type="hidden" class="prod-hscode" value="${escapeHTML(hsCode)}">
         <button type="button" class="btn-action" style="color:#dc2626; padding:0 8px; min-height:44px;" onclick="this.parentElement.remove()">&times;</button>
       `;
       container.appendChild(row);
     }
 
     function onProductSelectChange(selectElem) {
-      const selectedOption = selectElem.options[selectElem.selectedIndex];
-      const defaultPrice = selectedOption.getAttribute('data-price') || 0;
-      const defaultHSCode = selectedOption.getAttribute('data-hscode') || '';
+      const opt = selectElem.options[selectElem.selectedIndex];
       const row = selectElem.parentElement;
-      
+
       const priceInput = row.querySelector('.prod-price');
       if (priceInput && (!priceInput.value || parseFloat(priceInput.value) === 0)) {
-        priceInput.value = defaultPrice;
+        priceInput.value = opt.getAttribute('data-price') || 0;
       }
-      
       const hsInput = row.querySelector('.prod-hscode');
-      if (hsInput) {
-        hsInput.value = defaultHSCode;
-      }
+      if (hsInput) hsInput.value = opt.getAttribute('data-hscode') || '';
     }
 
     document.getElementById('orderForm').onsubmit = async (e) => {
       e.preventDefault();
       const btn = document.getElementById('btnSubmitOrder');
       const editId = document.getElementById('editingOrderId').value;
-      
-      btn.disabled = true;
-      btn.querySelector('span').innerText = editId ? "Updating Order..." : "Creating Order...";
 
       const items = [];
       document.querySelectorAll('.product-row').forEach(row => {
         const product_name = row.querySelector('.prod-select').value;
-        const qty = row.querySelector('.prod-qty').value;
-        const unit_price = row.querySelector('.prod-price').value;
-        const discount_percent = row.querySelector('.prod-discount').value || 0;
-        const hs_code = row.querySelector('.prod-hscode').value || '';
-        
-        if (product_name) items.push({ product_name, qty, unit_price, discount_percent, hs_code });
+        if (product_name) {
+          items.push({
+            product_name,
+            qty: row.querySelector('.prod-qty').value,
+            unit_price: row.querySelector('.prod-price').value,
+            discount_percent: row.querySelector('.prod-discount').value || 0,
+            hs_code: row.querySelector('.prod-hscode').value || ''
+          });
+        }
       });
+
+      if (items.length === 0) return showToast('Add at least one product', 'error');
+
+      btn.disabled = true;
+      btn.querySelector('span').innerText = editId ? 'Updating Order...' : 'Creating Order...';
 
       const payload = {
         customer_name: document.getElementById('name').value,
@@ -1040,51 +1035,50 @@
         instruction: document.getElementById('instruction').value
       };
 
-      const endpoint = editId ? `/api/orders/${editId}` : '/api/orders';
-      const method = editId ? 'PUT' : 'POST';
+      try {
+        const res = await authFetch(editId ? `/api/orders/${editId}` : '/api/orders', {
+          method: editId ? 'PUT' : 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await readJson(res);
+        if (!res.ok) { showToast(data.error || 'Action failed', 'error'); return; }
 
-      const res = await authFetch(endpoint, { method: method, body: JSON.stringify(payload) });
-      const data = await res.json();
-      btn.disabled = false;
-      btn.querySelector('span').innerText = "Save Order & Deduct Stock";
-
-      if (!res.ok) {
-        showToast(data.error || "Action failed", "error");
-        return;
+        showToast(editId ? 'Order Updated Successfully!' : 'Order Created Successfully!');
+        closeOrderModal();
+        fetchOrders();
+        fetchInventory();
+      } finally {
+        btn.disabled = false;
+        btn.querySelector('span').innerText = 'Save Order & Deduct Stock';
       }
-
-      showToast(editId ? "Order Updated Successfully!" : "Order Created Successfully!");
-      closeOrderModal();
-      fetchOrders();
-      fetchInventory();
     };
 
-    // --- NCM DETAIL & COMMENT LOGIC ---
+    /* ------------------------------------------------------------------ */
+    /*  Detail modal & comments                                           */
+    /* ------------------------------------------------------------------ */
     async function openDetailModal(orderId) {
       activeOrderDetailId = orderId;
       const res = await authFetch(`/api/orders/${orderId}`);
-      const order = await res.json();
+      const order = await readJson(res);
+      if (!res.ok) return showToast(order.error || 'Failed to load order', 'error');
 
-      document.getElementById('detail-order-id').innerText = `#${order.tracking_id || order.vref_id || order.id}`;
-      document.getElementById('detail-status-badge').innerText = (order.status || 'ACTIVE').toUpperCase();
-      document.getElementById('detail-route-time').innerText = `KALANKI → ${order.to_branch || 'KALANKI'}`;
-      
-      document.getElementById('detail-tracking-id').innerText = order.tracking_id || 'Not Dispatched';
-      document.getElementById('detail-cod').innerText = `Rs. ${order.cod_amount || 0}`;
-      document.getElementById('detail-receiver').innerText = order.customer_name;
-      document.getElementById('detail-phone').innerText = order.phone2 ? `${order.phone_number} / ${order.phone2}` : order.phone_number;
-      document.getElementById('detail-pan').innerText = order.customer_pan || 'None';
-      document.getElementById('detail-address').innerText = order.shipping_address;
-      document.getElementById('detail-delivery-type').innerText = order.delivery_type || 'Door2Door';
-
-      document.getElementById('detail-timeline-status').innerText = (order.status || 'Received').toUpperCase();
-      document.getElementById('detail-timeline-date').innerText = order.created_at ? new Date(order.created_at).toLocaleString() : '-';
-
-      document.getElementById('detail-items').innerText = order.package_name || '-';
-      document.getElementById('detail-instruction').innerText = order.instruction || 'None';
-
-      document.getElementById('detail-vref').innerText = order.vref_id || '-';
-      document.getElementById('detail-to-branch').innerText = order.to_branch || 'KALANKI';
+      const set = (id, v) => { document.getElementById(id).innerText = v; };
+      set('detail-order-id', `#${order.tracking_id || order.vref_id || order.id}`);
+      set('detail-status-badge', (order.status || 'ACTIVE').toUpperCase());
+      set('detail-route-time', `KALANKI → ${order.to_branch || 'KALANKI'}`);
+      set('detail-tracking-id', order.tracking_id || 'Not Dispatched');
+      set('detail-cod', `Rs. ${order.cod_amount || 0}`);
+      set('detail-receiver', order.customer_name);
+      set('detail-phone', order.phone2 ? `${order.phone_number} / ${order.phone2}` : order.phone_number);
+      set('detail-pan', order.customer_pan || 'None');
+      set('detail-address', order.shipping_address);
+      set('detail-delivery-type', order.delivery_type || 'Door2Door');
+      set('detail-timeline-status', (order.status || 'Received').toUpperCase());
+      set('detail-timeline-date', order.created_at ? new Date(order.created_at).toLocaleString() : '-');
+      set('detail-items', order.package_name || '-');
+      set('detail-instruction', order.instruction || 'None');
+      set('detail-vref', order.vref_id || '-');
+      set('detail-to-branch', order.to_branch || 'KALANKI');
 
       renderComments(order.comments || []);
       document.getElementById('detailModal').classList.add('active');
@@ -1110,13 +1104,15 @@
         return;
       }
 
-      comments.forEach(c => {
+      // newest first
+      [...comments].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).forEach(c => {
         const div = document.createElement('div');
         div.className = 'comment-item';
+        const when = new Date(c.timestamp);
         div.innerHTML = `
           <div class="comment-meta">
             <strong>${escapeHTML(c.author)}</strong>
-            <span>${new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <span>${isNaN(when) ? '' : when.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
           </div>
           <div>${escapeHTML(c.text)}</div>
         `;
@@ -1130,49 +1126,51 @@
       if (!text || !activeOrderDetailId) return;
 
       btn.disabled = true;
-      btn.querySelector('span').innerText = "Posting...";
+      btn.querySelector('span').innerText = 'Posting...';
 
-      const res = await authFetch(`/api/orders/${activeOrderDetailId}/comments`, {
-        method: 'POST',
-        body: JSON.stringify({ text })
-      });
-
-      btn.disabled = false;
-      btn.querySelector('span').innerText = "Post Note";
-
-      if (res.ok) {
-        const updatedOrder = await res.json();
-        showToast(updatedOrder.ncm_pushed ? "Comment posted & pushed to NCM!" : "Comment saved locally!");
-        document.getElementById('newCommentText').value = '';
-        toggleCommentInput();
-        renderComments(updatedOrder.comments || []);
-        fetchOrders();
-      } else {
-        showToast("Failed to post comment.", "error");
+      try {
+        const res = await authFetch(`/api/orders/${activeOrderDetailId}/comments`, { method: 'POST', body: JSON.stringify({ text }) });
+        if (res.ok) {
+          const updatedOrder = await res.json();
+          showToast(updatedOrder.ncm_pushed ? 'Comment posted & pushed to NCM!' : 'Comment saved locally!');
+          document.getElementById('newCommentText').value = '';
+          toggleCommentInput();
+          renderComments(updatedOrder.comments || []);
+          fetchOrders();
+        } else {
+          const data = await readJson(res);
+          showToast(data.error || 'Failed to post comment.', 'error');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.querySelector('span').innerText = 'Post Note';
       }
     }
 
     async function deleteOrder(id) {
-      if(!confirm('Delete this order permanently and restore item stock?')) return;
+      if (!confirm('Delete this order permanently and restore item stock?')) return;
       const res = await authFetch(`/api/orders/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        showToast("Order Deleted & Stock Restored!");
+        selectedOrderIds.delete(id);
+        showToast('Order Deleted & Stock Restored!');
         await fetchOrders();
         await fetchInventory();
       } else {
-        showToast("Failed to delete order.", "error");
+        showToast('Failed to delete order.', 'error');
       }
     }
 
     async function forceSync() {
-      showToast("Syncing with NCM API...");
-      await authFetch('/api/orders/sync', { method: 'POST' });
-      fetchOrders();
-      showToast("Sync check complete");
+      showToast('Syncing with NCM API...');
+      try {
+        await authFetch('/api/orders/sync', { method: 'POST' });
+        await fetchOrders();
+        showToast('Sync check complete');
+      } catch (err) { /* handled in authFetch */ }
     }
 
-    async function logout() { 
-      try { await dbClient.auth.signOut(); } catch (err) {}
+    async function logout() {
+      try { await dbClient.auth.signOut(); } catch (err) { /* ignore */ }
       finally { sessionStorage.clear(); window.location.href = '/index.html'; }
     }
   </script>
