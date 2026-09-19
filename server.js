@@ -5,6 +5,7 @@ const { Pool, types } = require('pg');
 const axios = require('axios');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
@@ -12,7 +13,7 @@ const { createClient } = require('@supabase/supabase-js');
 /* -------------------------------------------------------------------------- */
 /*  Configuration (no hardcoded secrets: the server refuses to start without)  */
 /* -------------------------------------------------------------------------- */
-const REQUIRED_ENV = ['NCM_TOKEN', 'DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+const REQUIRED_ENV = ['NCM_TOKEN', 'DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'ALLOWED_EMAILS', 'ADMIN_EMAILS'];
 const missingEnv = REQUIRED_ENV.filter((k) => !process.env[k]);
 if (missingEnv.length) {
   throw new Error(`Missing required environment variables: ${missingEnv.join(', ')}`);
@@ -24,14 +25,14 @@ const NCM_BASE = 'https://portal.nepalcanmove.com/api';
 const BUSINESS_TZ = process.env.BUSINESS_TZ || 'Asia/Kathmandu';
 const PORT = process.env.PORT || 3000;
 
-// Optional but strongly recommended: comma separated list of staff emails allowed to use the API.
-const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
-  .split(',')
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
-if (ALLOWED_EMAILS.length === 0) {
-  console.warn('[security] ALLOWED_EMAILS is not set: any valid Supabase user can access the API. Disable public sign-ups or set ALLOWED_EMAILS.');
-}
+const parseList = (v) => (v || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+
+// Roles. ADMIN_EMAILS: full access (delete, product/price edits, activity log).
+// ALLOWED_EMAILS: staff who may use the CRM. Admins are always allowed.
+const ADMIN_EMAILS = parseList(process.env.ADMIN_EMAILS);
+const ALLOWED_EMAILS = [...new Set([...parseList(process.env.ALLOWED_EMAILS), ...ADMIN_EMAILS])];
+const isAdminUser = (user) => ADMIN_EMAILS.includes(String((user && user.email) || '').toLowerCase());
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 const ALLOWED_STATUSES = ['received', 'packed', 'processing', 'hold', 'problem', 'delivered'];
 const ncmHeaders = { Authorization: `Token ${NCM_TOKEN}` };
@@ -50,7 +51,21 @@ app.set('trust proxy', 1);
 
 app.use(express.json({ limit: '200kb' }));
 app.use(cors({ origin: process.env.ALLOWED_ORIGIN || false }));
-app.use(helmet({ contentSecurityPolicy: false })); // pages use inline scripts/styles
+const SUPABASE_ORIGIN = new URL(process.env.SUPABASE_URL).origin;
+const cspDirectives = {
+  defaultSrc: ["'self'"],
+  scriptSrc: ["'self'", "'unsafe-inline'"], // pages use inline scripts; no third-party script hosts
+  scriptSrcAttr: ["'unsafe-inline'"], // inline onclick handlers
+  styleSrc: ["'self'", "'unsafe-inline'"],
+  imgSrc: ["'self'", 'data:'],
+  connectSrc: ["'self'", SUPABASE_ORIGIN],
+  objectSrc: ["'none'"],
+  baseUri: ["'self'"],
+  formAction: ["'self'"],
+  frameAncestors: ["'none'"],
+};
+if (!IS_PROD) cspDirectives.upgradeInsecureRequests = null; // allow plain http://localhost in development
+app.use(helmet({ contentSecurityPolicy: { directives: cspDirectives } }));
 
 app.use(
   '/api/',
@@ -62,6 +77,32 @@ app.use(
     message: { error: 'Too many requests. Please wait a few minutes.' },
   })
 );
+const makeLimiter = (max, message) =>
+  rateLimit({ windowMs: 15 * 60 * 1000, max, standardHeaders: true, legacyHeaders: false, message: { error: message } });
+const statusLimiter = makeLimiter(120, 'Too many status changes. Please wait a few minutes.');
+const syncLimiter = makeLimiter(10, 'Sync was requested too often. Please wait a few minutes.');
+
+// Serve the Supabase browser bundle from our own origin (no third-party CDN, version locked by package-lock.json).
+function findSupabaseBundle() {
+  let dir = path.dirname(require.resolve('@supabase/supabase-js'));
+  while (dir !== path.dirname(dir)) {
+    const pkgFile = path.join(dir, 'package.json');
+    if (fs.existsSync(pkgFile)) {
+      const meta = JSON.parse(fs.readFileSync(pkgFile, 'utf8'));
+      if (meta.name === '@supabase/supabase-js') return path.join(dir, meta.unpkg || meta.jsdelivr || 'dist/umd/supabase.js');
+    }
+    dir = path.dirname(dir);
+  }
+  return null;
+}
+const SUPABASE_BUNDLE = findSupabaseBundle();
+if (!SUPABASE_BUNDLE || !fs.existsSync(SUPABASE_BUNDLE)) {
+  throw new Error('Cannot find the @supabase/supabase-js browser bundle. Run "npm ci" first.');
+}
+app.get('/vendor/supabase.js', (req, res) => {
+  res.type('application/javascript').set('Cache-Control', 'public, max-age=86400').sendFile(SUPABASE_BUNDLE);
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
@@ -94,6 +135,49 @@ const ncmErrorMessage = (err) => {
   const data = err.response && err.response.data;
   if (data) return typeof data === 'string' ? data.slice(0, 300) : JSON.stringify(data).slice(0, 300);
   return err.message;
+};
+
+/* ---- Audit log helpers ---- */
+const who = (req) => (req.user && (req.user.email || req.user.id)) || 'unknown';
+
+// Throws on failure: use inside a transaction so the change and its log entry commit together.
+async function audit(db, actor, action, entity, entityId, label, details = {}) {
+  await db.query(
+    `INSERT INTO audit_log (user_email, action, entity, entity_id, entity_label, details)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+    [actor, action, entity, entityId === null || entityId === undefined ? null : String(entityId), label || null, JSON.stringify(details)]
+  );
+}
+// Never throws: for actions that are not inside a transaction.
+const auditSafe = (...args) => audit(...args).catch((e) => console.error('Audit log failed:', e.message));
+
+// Net stock change per product between two item lists (negative = stock taken out).
+function stockDelta(oldItems = [], newItems = []) {
+  const map = {};
+  for (const i of oldItems) map[i.product_name] = (map[i.product_name] || 0) + Number(i.qty || 0);
+  for (const i of newItems) map[i.product_name] = (map[i.product_name] || 0) - Number(i.qty || 0);
+  return Object.entries(map).filter(([, d]) => d !== 0).map(([product, delta]) => ({ product, delta }));
+}
+const withStock = (details, arr) => { if (arr && arr.length) details.stock = arr; return details; };
+
+async function withTransaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+const requireAdmin = (req, res, next) => {
+  if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Admin access required' });
+  next();
 };
 
 // Validate numeric :id params once for every route.
@@ -140,7 +224,7 @@ async function runMigrations() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       customer_pan TEXT,
       ncm_order_id TEXT,
-      bill_no SERIAL
+      bill_no INT
     );
 
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS items JSONB DEFAULT '[]'::jsonb;
@@ -149,15 +233,64 @@ async function runMigrations() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS processing_started_at TIMESTAMP DEFAULT NULL;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_pan TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS ncm_order_id TEXT;
-    ALTER TABLE orders ADD COLUMN IF NOT EXISTS bill_no SERIAL;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS bill_no INT;
+    ALTER TABLE orders ALTER COLUMN bill_no DROP DEFAULT;
+
+    -- Gapless bill numbering: one counter row, incremented inside the order transaction.
+    CREATE TABLE IF NOT EXISTS bill_counter (
+      id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+      last_no INT NOT NULL DEFAULT 0
+    );
+    INSERT INTO bill_counter (id, last_no) VALUES (1, 0) ON CONFLICT (id) DO NOTHING;
+    -- Continue after the highest existing bill number (existing printed bills keep their numbers).
+    UPDATE bill_counter SET last_no = GREATEST(last_no, COALESCE((SELECT MAX(bill_no) FROM orders), 0)) WHERE id = 1;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_bill_no ON orders (bill_no);
 
     CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at);
     CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status);
+
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by TEXT;
+
+    -- Who did what, and when (timestamptz: unambiguous regardless of server timezone)
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      user_email TEXT NOT NULL,
+      action TEXT NOT NULL,
+      entity TEXT NOT NULL,
+      entity_id TEXT,
+      entity_label TEXT,
+      details JSONB NOT NULL DEFAULT '{}'::jsonb
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log (user_email);
+    CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log (entity, entity_id);
+
+    -- Keep the log private from Supabase's public REST API (the server role bypasses RLS)
+    DO $$ BEGIN
+      ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+      REVOKE ALL ON audit_log FROM anon, authenticated;
+    EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
+    -- The audit log is append-only: rows can never be edited or deleted.
+    CREATE OR REPLACE FUNCTION audit_log_immutable() RETURNS trigger AS $fn$
+    BEGIN RAISE EXCEPTION 'audit_log is append-only'; END;
+    $fn$ LANGUAGE plpgsql;
+    DROP TRIGGER IF EXISTS trg_audit_immutable ON audit_log;
+    CREATE TRIGGER trg_audit_immutable BEFORE UPDATE OR DELETE ON audit_log
+      FOR EACH ROW EXECUTE FUNCTION audit_log_immutable();
 
     DO $$ BEGIN
       ALTER TABLE orders ALTER COLUMN cod_amount TYPE NUMERIC USING (NULLIF(cod_amount::text, '')::NUMERIC);
     EXCEPTION WHEN OTHERS THEN NULL; END $$;
   `);
+
+  // Keep every table away from Supabase's public REST API (this server connects as postgres and bypasses RLS).
+  for (const table of ['orders', 'inventory', 'bill_counter', 'audit_log']) {
+    await pool.query(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`).catch((e) => console.warn(`RLS on ${table}:`, e.message));
+    await pool.query(`REVOKE ALL ON TABLE ${table} FROM anon, authenticated`).catch(() => {});
+  }
+  await pool.query('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated').catch(() => {});
 }
 
 /* -------------------------------------------------------------------------- */
@@ -178,7 +311,7 @@ const verifyAuth = async (req, res, next) => {
 
     if (error || !user) return res.status(403).json({ error: 'Forbidden: Invalid session' });
 
-    if (ALLOWED_EMAILS.length && !ALLOWED_EMAILS.includes(String(user.email || '').toLowerCase())) {
+    if (!ALLOWED_EMAILS.includes(String(user.email || '').toLowerCase())) {
       return res.status(403).json({ error: 'Forbidden: Account not authorised' });
     }
 
@@ -195,6 +328,10 @@ const verifyAuth = async (req, res, next) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/analytics', (req, res) => res.sendFile(path.join(__dirname, 'public', 'analytics.html')));
+
+app.get('/api/me', verifyAuth, (req, res) => {
+  res.json({ email: req.user.email, is_admin: isAdminUser(req.user) });
+});
 
 /* -------------------------------------------------------------------------- */
 /*  NCM sync                                                                  */
@@ -280,6 +417,12 @@ async function syncOrdersWithNCM() {
            WHERE id = $3`,
           [newStatus, JSON.stringify(existingComments), order.id]
         );
+
+        if (newStatus !== order.status) {
+          await auditSafe(pool, 'system', 'order.status_auto', 'order', order.id, `Order #${order.id}`, {
+            from: order.status, to: newStatus, tracking_id: order.tracking_id,
+          });
+        }
       } catch (err) {
         console.error(`NCM sync failed for order ${order.id}:`, err.message);
       }
@@ -303,7 +446,7 @@ app.get('/api/inventory', verifyAuth, async (req, res) => {
   }
 });
 
-app.post('/api/inventory', verifyAuth, async (req, res) => {
+app.post('/api/inventory', verifyAuth, requireAdmin, async (req, res) => {
   const product_name = sanitizeText(req.body.product_name);
   const sku = sanitizeText(req.body.sku) || '';
   const hs_code = sanitizeText(req.body.hs_code) || '';
@@ -315,16 +458,30 @@ app.post('/api/inventory', verifyAuth, async (req, res) => {
   if (!Number.isFinite(default_price) || default_price < 0) return res.status(400).json({ error: 'Invalid price' });
 
   try {
-    const result = await pool.query(
-      `INSERT INTO inventory (product_name, stock_quantity, sku, hs_code, default_price)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (product_name) DO UPDATE SET
-         stock_quantity = EXCLUDED.stock_quantity, sku = EXCLUDED.sku,
-         hs_code = EXCLUDED.hs_code, default_price = EXCLUDED.default_price
-       RETURNING *`,
-      [product_name, stock_quantity, sku, hs_code, default_price]
-    );
-    res.json(result.rows[0]);
+    const row = await withTransaction(async (client) => {
+      const prev = (await client.query('SELECT * FROM inventory WHERE product_name = $1 FOR UPDATE', [product_name])).rows[0];
+      const result = await client.query(
+        `INSERT INTO inventory (product_name, stock_quantity, sku, hs_code, default_price)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (product_name) DO UPDATE SET
+           stock_quantity = EXCLUDED.stock_quantity, sku = EXCLUDED.sku,
+           hs_code = EXCLUDED.hs_code, default_price = EXCLUDED.default_price
+         RETURNING *`,
+        [product_name, stock_quantity, sku, hs_code, default_price]
+      );
+      const saved = result.rows[0];
+      const snap = (r) => (r ? { stock: r.stock_quantity, price: Number(r.default_price), sku: r.sku || '', hs_code: r.hs_code || '' } : null);
+      const before = snap(prev);
+      const after = snap(saved);
+
+      if (!prev || JSON.stringify(before) !== JSON.stringify(after)) {
+        const delta = saved.stock_quantity - (prev ? prev.stock_quantity : 0);
+        await audit(client, who(req), prev ? 'inventory.update' : 'inventory.create', 'inventory', saved.id, product_name,
+          withStock({ before, after }, delta !== 0 ? [{ product: product_name, delta }] : []));
+      }
+      return saved;
+    });
+    res.json(row);
   } catch (err) {
     res.status(500).json({ error: 'Failed to save inventory item' });
   }
@@ -335,20 +492,39 @@ app.patch('/api/inventory/:id/stock', verifyAuth, async (req, res) => {
   if (!Number.isInteger(adjustment)) return res.status(400).json({ error: 'Invalid adjustment' });
 
   try {
-    const result = await pool.query(
-      'UPDATE inventory SET stock_quantity = GREATEST(0, stock_quantity + $1) WHERE id = $2 RETURNING *',
-      [adjustment, req.params.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
-    res.json(result.rows[0]);
+    const row = await withTransaction(async (client) => {
+      const result = await client.query(
+        `WITH old AS (SELECT id, stock_quantity FROM inventory WHERE id = $2 FOR UPDATE)
+         UPDATE inventory i SET stock_quantity = GREATEST(0, old.stock_quantity + $1)
+         FROM old WHERE i.id = old.id
+         RETURNING i.*, old.stock_quantity AS old_qty`,
+        [adjustment, req.params.id]
+      );
+      if (result.rows.length === 0) return null;
+      const r = result.rows[0];
+      const delta = r.stock_quantity - r.old_qty;
+      await audit(client, who(req), 'inventory.adjust', 'inventory', r.id, r.product_name,
+        withStock({ before: r.old_qty, after: r.stock_quantity }, delta !== 0 ? [{ product: r.product_name, delta }] : []));
+      delete r.old_qty;
+      return r;
+    });
+    if (!row) return res.status(404).json({ error: 'Product not found' });
+    res.json(row);
   } catch (err) {
     res.status(500).json({ error: 'Failed to adjust stock' });
   }
 });
 
-app.delete('/api/inventory/:id', verifyAuth, async (req, res) => {
+app.delete('/api/inventory/:id', verifyAuth, requireAdmin, async (req, res) => {
   try {
-    await pool.query('DELETE FROM inventory WHERE id = $1', [req.params.id]);
+    await withTransaction(async (client) => {
+      const del = await client.query('DELETE FROM inventory WHERE id = $1 RETURNING *', [req.params.id]);
+      if (del.rows.length > 0) {
+        const r = del.rows[0];
+        await audit(client, who(req), 'inventory.delete', 'inventory', r.id, r.product_name,
+          withStock({ stock_quantity: r.stock_quantity }, r.stock_quantity ? [{ product: r.product_name, delta: -r.stock_quantity }] : []));
+      }
+    });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete inventory item' });
@@ -502,19 +678,27 @@ app.post('/api/orders', verifyAuth, async (req, res) => {
     await client.query('BEGIN');
     const { savedItems, packageName } = await reserveItems(client, body.items);
 
+    // Take the next bill number last (row lock is held until COMMIT). If anything above fails,
+    // the whole transaction rolls back and the number is NOT consumed.
+    const billRes = await client.query('UPDATE bill_counter SET last_no = last_no + 1 WHERE id = 1 RETURNING last_no');
+    const billNo = billRes.rows[0].last_no;
+
     const result = await client.query(
       `INSERT INTO orders (customer_name, phone_number, phone2, shipping_address, package_name, items,
-                           cod_amount, to_branch, instruction, delivery_type, customer_pan)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11) RETURNING id`,
+                           cod_amount, to_branch, instruction, delivery_type, customer_pan, bill_no, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13) RETURNING id, bill_no`,
       [
         body.customer_name, body.phone_number, body.phone2, body.shipping_address, packageName,
         JSON.stringify(savedItems), body.cod_amount, body.to_branch, body.instruction,
-        body.delivery_type, body.customer_pan,
+        body.delivery_type, body.customer_pan, billNo, who(req),
       ]
     );
 
+    await audit(client, who(req), 'order.create', 'order', result.rows[0].id, body.customer_name,
+      withStock({ customer: body.customer_name, package: packageName, cod: body.cod_amount }, stockDelta([], savedItems)));
+
     await client.query('COMMIT');
-    res.json({ id: result.rows[0].id, package_name: packageName });
+    res.json({ id: result.rows[0].id, bill_no: result.rows[0].bill_no, package_name: packageName });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     res.status(400).json({ error: err.message || 'Order creation failed' });
@@ -535,7 +719,7 @@ app.put('/api/orders/:id', verifyAuth, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const current = await client.query('SELECT status, items FROM orders WHERE id = $1 FOR UPDATE', [req.params.id]);
+    const current = await client.query('SELECT status, items, customer_name, package_name, cod_amount FROM orders WHERE id = $1 FOR UPDATE', [req.params.id]);
     if (current.rows.length === 0) throw new Error('Order not found');
     if (current.rows[0].status !== 'received') throw new Error('Order cannot be edited once it has passed "Received" status');
 
@@ -562,6 +746,15 @@ app.put('/api/orders/:id', verifyAuth, async (req, res) => {
       ]
     );
 
+    const prev = current.rows[0];
+    await audit(client, who(req), 'order.update', 'order', req.params.id, body.customer_name,
+      withStock({
+        customer: body.customer_name,
+        package: packageName,
+        before: { customer: prev.customer_name, package: prev.package_name, cod: Number(prev.cod_amount) },
+        after: { customer: body.customer_name, package: packageName, cod: body.cod_amount },
+      }, stockDelta(oldItems, savedItems)));
+
     await client.query('COMMIT');
     res.json({ success: true, package_name: packageName });
   } catch (err) {
@@ -575,7 +768,7 @@ app.put('/api/orders/:id', verifyAuth, async (req, res) => {
 // Prevents double-clicks from creating two NCM shipments for the same order.
 const dispatching = new Set();
 
-app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
+app.patch('/api/orders/:id/status', verifyAuth, statusLimiter, async (req, res) => {
   const status = sanitizeText(req.body.status);
   const orderId = req.params.id;
 
@@ -631,6 +824,9 @@ app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
           "UPDATE orders SET tracking_id = $1, ncm_order_id = $1, vref_id = $2, status = 'packed', status_updated_at = CURRENT_TIMESTAMP WHERE id = $3",
           [String(ncmOrderId), vref, orderId]
         );
+        await auditSafe(pool, who(req), 'order.status', 'order', orderId, order.customer_name, {
+          from: order.status, to: 'packed', tracking_id: String(ncmOrderId), dispatched: true,
+        });
         return res.json({ success: true, tracking_id: ncmOrderId, ncm_order_id: ncmOrderId, new_status: 'packed' });
       } finally {
         dispatching.delete(orderId);
@@ -647,10 +843,13 @@ app.patch('/api/orders/:id/status', verifyAuth, async (req, res) => {
        WHERE id = $2`,
       [status, orderId]
     );
+    if (order.status !== status) {
+      await auditSafe(pool, who(req), 'order.status', 'order', orderId, order.customer_name, { from: order.status, to: status });
+    }
     res.json({ success: true, status });
   } catch (error) {
     console.error('Status update failed:', error.message);
-    res.status(500).json({ error: 'Logistics processing failed', details: error.message });
+    res.status(500).json({ error: 'Logistics processing failed' });
   }
 });
 
@@ -685,22 +884,25 @@ app.post('/api/orders/:id/comments', verifyAuth, async (req, res) => {
       [JSON.stringify([commentObj]), req.params.id]
     );
 
+    await auditSafe(pool, who(req), 'order.comment', 'order', req.params.id, updatedRes.rows[0].customer_name, {
+      text: text.slice(0, 200), ncm_pushed: ncmPushed,
+    });
     res.json({ ...updatedRes.rows[0], ncm_pushed: ncmPushed });
   } catch (err) {
     res.status(500).json({ error: 'Failed to add comment' });
   }
 });
 
-app.post('/api/orders/sync', verifyAuth, async (req, res) => {
+app.post('/api/orders/sync', verifyAuth, syncLimiter, async (req, res) => {
   await syncOrdersWithNCM();
   res.json({ success: true });
 });
 
-app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
+app.delete('/api/orders/:id', verifyAuth, requireAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const orderRes = await client.query('SELECT status, items FROM orders WHERE id = $1 FOR UPDATE', [req.params.id]);
+    const orderRes = await client.query('SELECT status, items, customer_name, package_name FROM orders WHERE id = $1 FOR UPDATE', [req.params.id]);
 
     if (orderRes.rows.length > 0) {
       const order = orderRes.rows[0];
@@ -712,6 +914,12 @@ app.delete('/api/orders/:id', verifyAuth, async (req, res) => {
           }
         }
       }
+    }
+    if (orderRes.rows.length > 0) {
+      const o = orderRes.rows[0];
+      const restored = o.status !== 'delivered' ? stockDelta(Array.isArray(o.items) ? o.items : [], []) : [];
+      await audit(client, who(req), 'order.delete', 'order', req.params.id, o.customer_name,
+        withStock({ customer: o.customer_name, package: o.package_name, status: o.status }, restored));
     }
     await client.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
     await client.query('COMMIT');
@@ -873,6 +1081,111 @@ app.get('/api/analytics/overview', verifyAuth, async (req, res) => {
   } catch (err) {
     console.error('ANALYTICS ERROR:', err.message);
     res.status(500).json({ error: 'Failed to calculate dynamic analytics dataset' });
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Team activity (audit log + contribution report)                           */
+/* -------------------------------------------------------------------------- */
+const AUDIT_LOCAL = `(created_at AT TIME ZONE '${BUSINESS_TZ}')`;
+
+// Date range (business timezone). Defaults to the last 30 days.
+function activityRange(query) {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TZ }).format(new Date());
+  const from = new Date(`${today}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - 29);
+  const pick = (v, fallback) => {
+    const m = typeof v === 'string' ? v.match(/^(\d{4}-\d{2}-\d{2})/) : null;
+    return m ? m[1] : fallback;
+  };
+  return {
+    start: `${pick(query.startDate, from.toISOString().slice(0, 10))} 00:00:00`,
+    end: `${pick(query.endDate, today)} 23:59:59`,
+  };
+}
+
+app.get('/api/activity', verifyAuth, requireAdmin, async (req, res) => {
+  try {
+    const { start, end } = activityRange(req.query);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+    const params = [start, end];
+    let where = `${AUDIT_LOCAL} >= $1::timestamp AND ${AUDIT_LOCAL} <= $2::timestamp`;
+    if (req.query.user) {
+      params.push(String(req.query.user));
+      where += ` AND user_email = $${params.length}`;
+    }
+    if (req.query.type === 'stock') where += ` AND (action LIKE 'inventory.%' OR details->'stock' IS NOT NULL)`;
+    else if (req.query.type === 'orders') where += ` AND entity = 'order'`;
+
+    params.push(limit + 1, offset);
+    const result = await pool.query(
+      `SELECT id, created_at, user_email, action, entity, entity_id, entity_label, details
+       FROM audit_log WHERE ${where}
+       ORDER BY id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+    res.json({ rows: result.rows.slice(0, limit), hasMore: result.rows.length > limit });
+  } catch (err) {
+    console.error('Activity feed error:', err.message);
+    res.status(500).json({ error: 'Failed to load activity' });
+  }
+});
+
+app.get('/api/activity/summary', verifyAuth, requireAdmin, async (req, res) => {
+  try {
+    const { start, end } = activityRange(req.query);
+
+    const [auditRes, ordersRes] = await Promise.all([
+      pool.query(
+        `SELECT user_email,
+           COUNT(*) FILTER (WHERE action = 'order.create') AS orders_created,
+           COUNT(*) FILTER (WHERE action = 'order.update') AS orders_edited,
+           COUNT(*) FILTER (WHERE action = 'order.status') AS status_changes,
+           COUNT(*) FILTER (WHERE action LIKE 'inventory.%') AS stock_changes,
+           COUNT(*) FILTER (WHERE action = 'order.delete') AS orders_deleted,
+           COUNT(*) FILTER (WHERE action = 'order.comment') AS comments,
+           COUNT(*) AS total_actions,
+           MAX(created_at) AS last_active
+         FROM audit_log
+         WHERE ${AUDIT_LOCAL} >= $1::timestamp AND ${AUDIT_LOCAL} <= $2::timestamp AND user_email <> 'system'
+         GROUP BY user_email`,
+        [start, end]
+      ),
+      pool.query(
+        `SELECT created_by, COUNT(*) AS orders, COALESCE(SUM(cod_amount), 0) AS value,
+                COALESCE(SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END), 0) AS delivered
+         FROM orders
+         WHERE created_by IS NOT NULL AND ${LOCAL_CREATED} >= $1::timestamp AND ${LOCAL_CREATED} <= $2::timestamp
+         GROUP BY created_by`,
+        [start, end]
+      ),
+    ]);
+
+    const n = (v) => parseInt(v, 10) || 0;
+    const byUser = {};
+    auditRes.rows.forEach((r) => {
+      byUser[r.user_email] = {
+        user: r.user_email,
+        orders_created: n(r.orders_created), orders_edited: n(r.orders_edited), status_changes: n(r.status_changes),
+        stock_changes: n(r.stock_changes), orders_deleted: n(r.orders_deleted), comments: n(r.comments),
+        total_actions: n(r.total_actions), last_active: r.last_active,
+        order_value: 0, orders_delivered: 0,
+      };
+    });
+    ordersRes.rows.forEach((r) => {
+      if (byUser[r.created_by]) {
+        byUser[r.created_by].order_value = parseFloat(r.value) || 0;
+        byUser[r.created_by].orders_delivered = n(r.delivered);
+      }
+    });
+
+    const users = Object.values(byUser).sort((a, b) => b.orders_created - a.orders_created || b.total_actions - a.total_actions);
+    res.json({ range: { start, end }, users });
+  } catch (err) {
+    console.error('Activity summary error:', err.message);
+    res.status(500).json({ error: 'Failed to load activity summary' });
   }
 });
 

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zenzi Shop — Admin Access</title>
   <link rel="icon" type="image/png" href="/favicon.png?v=2">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/vendor/supabase.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -39,36 +39,12 @@
       justify-content: center;
       margin-bottom: 16px;
     }
-    .icon-wrapper svg {
-      width: 22px;
-      height: 22px;
-      stroke: #0284c7;
-      stroke-width: 2;
-      fill: none;
-    }
-    h2 {
-      margin: 0 0 6px 0;
-      font-size: 24px;
-      font-weight: 700;
-      color: #0f172a;
-      letter-spacing: -0.4px;
-    }
-    .subtitle {
-      margin: 0 0 28px 0;
-      font-size: 14px;
-      color: #64748b;
-    }
-    .form-group {
-      text-align: left;
-      margin-bottom: 20px;
-    }
-    label {
-      display: block;
-      font-size: 14px;
-      font-weight: 500;
-      color: #334155;
-      margin-bottom: 8px;
-    }
+    .icon-wrapper svg { width: 22px; height: 22px; stroke: #0284c7; stroke-width: 2; fill: none; }
+    h2 { margin: 0 0 6px 0; font-size: 24px; font-weight: 700; color: #0f172a; letter-spacing: -0.4px; }
+    .subtitle { margin: 0 0 28px 0; font-size: 14px; color: #64748b; }
+    form { margin: 0; }
+    .form-group { text-align: left; margin-bottom: 20px; }
+    label { display: block; font-size: 14px; font-weight: 500; color: #334155; margin-bottom: 8px; }
     input {
       width: 100%;
       padding: 12px 16px;
@@ -81,10 +57,7 @@
       transition: all 0.2s ease;
     }
     input::placeholder { color: #94a3b8; }
-    input:focus {
-      border-color: #38bdf8;
-      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
-    }
+    input:focus { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15); }
     button {
       width: 100%;
       background: #0f172a;
@@ -105,7 +78,7 @@
     button:hover { background: #1e293b; }
     button:disabled { background: #94a3b8; cursor: not-allowed; }
     button svg { width: 16px; height: 16px; stroke: #ffffff; stroke-width: 2.5; fill: none; }
-    .msg { margin-top: 16px; font-size: 13px; text-align: center; word-break: break-word; }
+    .msg { margin-top: 16px; font-size: 13px; text-align: center; word-break: break-word; min-height: 18px; }
     .error { color: #ef4444; }
   </style>
 </head>
@@ -125,12 +98,12 @@
     <form id="loginForm">
       <div class="form-group">
         <label for="email">Username / Email</label>
-        <input type="email" id="email" placeholder="Enter your email" required>
+        <input type="email" id="email" name="email" placeholder="Enter your email" autocomplete="username" required>
       </div>
 
       <div class="form-group">
         <label for="password">Password</label>
-        <input type="password" id="password" placeholder="••••••••" required>
+        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
       </div>
 
       <button type="submit" id="btn-login">
@@ -142,23 +115,20 @@
       </button>
     </form>
 
-    <div id="status-msg" class="msg"></div>
+    <div id="status-msg" class="msg" role="alert"></div>
   </div>
 
   <script>
+    // Supabase public config (the anon key is designed to be public)
     const SUPABASE_URL = "https://pnecdxsqaevyvsnibdcu.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNkeHNxYWV2eXZzbmliZGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTM5ODYsImV4cCI6MjEwNDYyOTk4Nn0.Tv4JKePkfyAFUYsDnPSRNnRIt_mcs_lmNFh67VHaEBI";
 
     const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        storage: window.sessionStorage,
-        persistSession: true
-      }
+      auth: { storage: window.sessionStorage, persistSession: true }
     });
 
-    for (let key in localStorage) {
-      if (key.startsWith('sb-')) localStorage.removeItem(key);
-    }
+    // Remove any old long-lived sessions left in localStorage by earlier versions
+    Object.keys(localStorage).forEach(key => { if (key.startsWith('sb-')) localStorage.removeItem(key); });
 
     dbClient.auth.getSession().then(({ data: { session } }) => {
       if (session) window.location.href = '/dashboard.html';
@@ -168,22 +138,23 @@
       e.preventDefault();
       const msg = document.getElementById('status-msg');
       const btn = document.getElementById('btn-login');
+      const label = btn.querySelector('span');
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
 
-      msg.innerText = "";
-      btn.querySelector('span').innerText = "Authenticating...";
+      msg.textContent = '';
+      label.textContent = 'Authenticating...';
       btn.disabled = true;
 
-      const { data, error } = await dbClient.auth.signInWithPassword({ email, password });
-
-      if (error) {
-        msg.innerText = error.message;
-        msg.className = "msg error";
-        btn.querySelector('span').innerText = "Sign In";
-        btn.disabled = false;
-      } else {
+      try {
+        const { error } = await dbClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
         window.location.href = '/dashboard.html';
+      } catch (err) {
+        msg.textContent = err.message || 'Sign in failed. Please try again.';
+        msg.className = 'msg error';
+        label.textContent = 'Sign In';
+        btn.disabled = false;
       }
     };
   </script>

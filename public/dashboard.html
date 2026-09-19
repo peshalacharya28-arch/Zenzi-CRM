@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Zenzi Shop — Operations Portal</title>
   <link rel="icon" type="image/png" href="/favicon.png?v=2">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/vendor/supabase.js"></script>
   <style>
     :root {
       --bg-light: #f8fafc; --card-bg: #ffffff; --text-main: #0f172a; --text-sub: #64748b;
@@ -90,6 +90,12 @@
     .comment-item { background: #f8fafc; border: 1px solid var(--border-color); padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 12px; }
     .comment-meta { font-size: 10px; color: var(--text-sub); display: flex; justify-content: space-between; margin-bottom: 4px; }
 
+    .act-tab { padding: 10px 14px; border: none; background: transparent; font-size: 12px; font-weight: 600; color: var(--text-sub); cursor: pointer; border-radius: 6px; white-space: nowrap; flex: 1; text-align: center; }
+    .act-tab.active { background: #fff; color: var(--text-main); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .act-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+    .act-filters input, .act-filters select { padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; background: #fafafa; }
+    .link-btn { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: var(--primary-blue); cursor: pointer; text-align: left; }
+    .act-stock { display: block; font-size: 11px; color: #b45309; margin-top: 2px; }
     .bulk-toolbar { display: flex; align-items: center; gap: 12px; background: #e0f2fe; border: 1px solid #bae6fd; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 600; color: #0369a1; flex-wrap: wrap; }
 
     /* ---------- BILL STYLES (shared by on-screen preview and print) ---------- */
@@ -142,6 +148,7 @@
       <div class="header-actions">
         <button class="btn-action btn-primary" onclick="openOrderModal()">+ Add Order</button>
         <button class="btn-action" onclick="openInventoryModal()">📦 Inventory & Stock</button>
+        <button class="btn-action" id="btnActivity" style="display:none;" onclick="openActivityModal()">🕘 Activity</button>
         <button class="btn-action" onclick="window.location.href='/analytics'">📊 Analytics</button>
         <button class="btn-action" onclick="forceSync()">🔄 Sync NCM</button>
         <button class="btn-action" onclick="logout()">Logout</button>
@@ -244,7 +251,7 @@
         <button class="close-btn" onclick="closeInventoryModal()">&times;</button>
       </div>
 
-      <form id="inventoryForm" style="margin-bottom: 16px; padding: 12px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 8px;">
+      <form id="inventoryForm" style="display:none; margin-bottom: 16px; padding: 12px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 8px;">
         <input type="text" id="invProductName" placeholder="Product Name *" required>
         <input type="text" id="invSKU" placeholder="SKU Code (Optional)">
         <input type="text" id="invHSCode" placeholder="HS Code (Optional)">
@@ -342,9 +349,65 @@
           <div class="ncm-card">
             <div class="ncm-card-title">🏷️ Reference & Tags</div>
             <div class="ncm-data-row"><span class="ncm-data-label">VREF ID</span><span class="ncm-data-value" id="detail-vref">-</span></div>
+            <div class="ncm-data-row"><span class="ncm-data-label">Entered by</span><span class="ncm-data-value" id="detail-created-by">-</span></div>
             <div class="ncm-data-row"><span class="ncm-data-label">Origin Branch</span><span class="ncm-data-value">KALANKI</span></div>
             <div class="ncm-data-row"><span class="ncm-data-label">Destination Branch</span><span class="ncm-data-value" id="detail-to-branch">KALANKI</span></div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEAM ACTIVITY MODAL -->
+  <div class="modal-overlay" id="activityModal" onclick="if(event.target===this) closeActivityModal()">
+    <div class="modal-content" style="max-width: 1050px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 18px;">Team Activity</h3>
+        <button class="close-btn" onclick="closeActivityModal()">&times;</button>
+      </div>
+
+      <div class="act-filters">
+        <input type="date" id="actStart"> <span style="color: var(--text-sub);">to</span> <input type="date" id="actEnd">
+        <button class="btn-action" style="min-height: 40px; padding: 8px 14px;" onclick="loadActivity()">Apply</button>
+      </div>
+
+      <div class="tabs" style="margin-bottom: 14px;">
+        <button class="act-tab active" onclick="setActTab('board', this)">🏆 Leaderboard</button>
+        <button class="act-tab" onclick="setActTab('feed', this)">📜 Change Log</button>
+      </div>
+
+      <div id="actBoard">
+        <div class="table-wrapper">
+          <table style="min-width: 820px;">
+            <thead>
+              <tr>
+                <th>#</th><th>User</th><th>Orders entered</th><th>Order value</th><th>Delivered</th>
+                <th>Edits</th><th>Status changes</th><th>Stock changes</th><th>Deletes</th><th>Last active</th>
+              </tr>
+            </thead>
+            <tbody id="actBoardBody"></tbody>
+          </table>
+        </div>
+        <div style="font-size: 11px; color: var(--text-sub); margin-top: 8px;">Order value and delivered count only cover orders entered after activity tracking was switched on.</div>
+      </div>
+
+      <div id="actFeed" style="display: none;">
+        <div class="act-filters">
+          <select id="actType" onchange="loadFeed(true)">
+            <option value="all">Everything</option>
+            <option value="stock">Stock changes only</option>
+            <option value="orders">Orders only</option>
+          </select>
+          <select id="actUser" onchange="loadFeed(true)"><option value="">All users</option></select>
+        </div>
+        <div class="table-wrapper">
+          <table style="min-width: 720px;">
+            <thead><tr><th>When</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
+            <tbody id="actFeedBody"></tbody>
+          </table>
+        </div>
+        <div style="text-align: center; margin-top: 12px;">
+          <button class="btn-action" id="actMoreBtn" style="display: none;" onclick="loadFeed(false)">Load more</button>
         </div>
       </div>
     </div>
@@ -393,6 +456,7 @@
     let currentFilter = 'all';
     let activeOrderDetailId = null;
     let selectedOrderIds = new Set();
+    let isAdmin = false; // set from /api/me; the server enforces this too
 
     function showToast(message, type = 'success') {
       const container = document.getElementById('toast-container');
@@ -421,9 +485,15 @@
 
       options.headers = { ...options.headers, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
       const res = await fetch(url, options);
-      if (res.status === 401 || res.status === 403) {
-        showToast('Session expired or access denied. Please log in again.', 'error');
+      if (res.status === 401) {
+        showToast('Session expired. Please log in again.', 'error');
         logout();
+      } else if (res.status === 403) {
+        const body = await res.clone().json().catch(() => ({}));
+        if (String(body.error || '').startsWith('Forbidden')) {
+          showToast('Access denied. Please log in again.', 'error');
+          logout();
+        }
       }
       return res;
     }
@@ -434,6 +504,7 @@
 
     dbClient.auth.getSession().then(({ data: { session } }) => {
       if (!session) { window.location.href = '/index.html'; return; }
+      loadMe();
       loadBranches();
       fetchInventory();
       fetchOrders();
@@ -442,6 +513,18 @@
     /* ------------------------------------------------------------------ */
     /*  Orders list                                                       */
     /* ------------------------------------------------------------------ */
+    async function loadMe() {
+      try {
+        const res = await authFetch('/api/me');
+        const me = await readJson(res);
+        isAdmin = !!me.is_admin;
+      } catch (err) { isAdmin = false; }
+      document.getElementById('btnActivity').style.display = isAdmin ? '' : 'none';
+      document.getElementById('inventoryForm').style.display = isAdmin ? '' : 'none';
+      renderTable();
+      renderInventoryTable();
+    }
+
     async function fetchOrders() {
       try {
         const res = await authFetch('/api/orders');
@@ -565,7 +648,7 @@
               <button class="btn-icon" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;" onclick="singlePrintBill(${o.id})" title="Print Bill">🖨️</button>
               <button class="btn-icon" style="background:#fff1f2; color:#e11d48; border-color:#fecdd3;" onclick="openDetailModal(${o.id})" title="View Details & Comments">👁️</button>
               ${editBtnHtml}
-              <button class="btn-action" style="color:#dc2626; padding: 6px 10px; font-size:11px; min-height:36px;" onclick="deleteOrder(${o.id})">Delete</button>
+              ${isAdmin ? `<button class="btn-action" style="color:#dc2626; padding: 6px 10px; font-size:11px; min-height:36px;" onclick="deleteOrder(${o.id})">Delete</button>` : ''}
             </div>
           </td>
         `;
@@ -850,7 +933,7 @@
             <button class="btn-action" style="padding:4px 10px; min-height:36px;" onclick="adjustStock(${item.id}, 1)">+1</button>
             <button class="btn-action" style="padding:4px 10px; min-height:36px;" onclick="adjustStock(${item.id}, -1)">-1</button>
           </td>
-          <td><button class="btn-action" style="color:#dc2626; padding:4px 10px; min-height:36px;" onclick="deleteInventoryItem(${item.id})">Del</button></td>
+          <td>${isAdmin ? `<button class="btn-action" style="color:#dc2626; padding:4px 10px; min-height:36px;" onclick="deleteInventoryItem(${item.id})">Del</button>` : ''}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -1059,6 +1142,7 @@
       set('detail-items', order.package_name || '-');
       set('detail-instruction', order.instruction || 'None');
       set('detail-vref', order.vref_id || '-');
+      set('detail-created-by', order.created_by || 'Not recorded');
       set('detail-to-branch', order.to_branch || 'KALANKI');
 
       renderComments(order.comments || []);
@@ -1148,6 +1232,174 @@
         await fetchOrders();
         showToast('Sync check complete');
       } catch (err) { /* handled in authFetch */ }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Team activity                                                     */
+    /* ------------------------------------------------------------------ */
+    const ACT_LABELS = {
+      'order.create': 'Created order', 'order.update': 'Edited order', 'order.delete': 'Deleted order',
+      'order.status': 'Changed status', 'order.status_auto': 'Auto status (NCM)', 'order.comment': 'Added comment',
+      'inventory.create': 'Added product', 'inventory.update': 'Updated product',
+      'inventory.adjust': 'Adjusted stock', 'inventory.delete': 'Deleted product'
+    };
+    let actFeedOffset = 0;
+
+    function openActivityModal() {
+      const startEl = document.getElementById('actStart');
+      const endEl = document.getElementById('actEnd');
+      if (!endEl.value) {
+        const to = new Date();
+        const from = new Date();
+        from.setDate(from.getDate() - 29);
+        startEl.value = localDate(from);
+        endEl.value = localDate(to);
+      }
+      document.getElementById('activityModal').classList.add('active');
+      loadActivity();
+    }
+
+    function closeActivityModal() { document.getElementById('activityModal').classList.remove('active'); }
+
+    function setActTab(tab, el) {
+      document.querySelectorAll('.act-tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('actBoard').style.display = tab === 'board' ? 'block' : 'none';
+      document.getElementById('actFeed').style.display = tab === 'feed' ? 'block' : 'none';
+    }
+
+    function actRangeQS() {
+      const s = document.getElementById('actStart').value;
+      const e = document.getElementById('actEnd').value;
+      return `startDate=${encodeURIComponent(s)}&endDate=${encodeURIComponent(e)}`;
+    }
+
+    async function loadActivity() {
+      await loadLeaderboard();
+      await loadFeed(true);
+    }
+
+    async function loadLeaderboard() {
+      const body = document.getElementById('actBoardBody');
+      body.innerHTML = `<tr><td colspan="10" style="text-align:center; color: var(--text-sub); padding: 24px;">Loading...</td></tr>`;
+      try {
+        const res = await authFetch(`/api/activity/summary?${actRangeQS()}`);
+        const data = await readJson(res);
+        if (!res.ok) {
+          body.innerHTML = `<tr><td colspan="10" style="text-align:center; color:#dc2626; padding: 24px;">${escapeHTML(data.error || 'Failed to load')}</td></tr>`;
+          return;
+        }
+
+        // keep the user filter in sync with people active in this range
+        const sel = document.getElementById('actUser');
+        const current = sel.value;
+        sel.innerHTML = '<option value="">All users</option>' +
+          data.users.map(u => `<option value="${escapeHTML(u.user)}">${escapeHTML(u.user)}</option>`).join('');
+        sel.value = data.users.some(u => u.user === current) ? current : '';
+
+        if (data.users.length === 0) {
+          body.innerHTML = `<tr><td colspan="10" style="text-align:center; color: var(--text-sub); padding: 24px;">No activity recorded in this period yet.</td></tr>`;
+          return;
+        }
+
+        const medals = ['🥇', '🥈', '🥉'];
+        const fmt = n => Number(n || 0).toLocaleString();
+        body.innerHTML = data.users.map((u, i) => `
+          <tr>
+            <td>${u.orders_created > 0 && i < 3 ? medals[i] : i + 1}</td>
+            <td><button class="link-btn" data-u="${escapeHTML(u.user)}" onclick="viewUserActivity(this.dataset.u)">${escapeHTML(u.user)}</button></td>
+            <td><strong>${fmt(u.orders_created)}</strong></td>
+            <td>NPR ${fmt(u.order_value)}</td>
+            <td>${fmt(u.orders_delivered)}</td>
+            <td>${fmt(u.orders_edited)}</td>
+            <td>${fmt(u.status_changes)}</td>
+            <td>${fmt(u.stock_changes)}</td>
+            <td>${fmt(u.orders_deleted)}</td>
+            <td style="font-size:12px; color: var(--text-sub);">${u.last_active ? new Date(u.last_active).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '-'}</td>
+          </tr>`).join('');
+      } catch (err) {
+        body.innerHTML = `<tr><td colspan="10" style="text-align:center; color:#dc2626; padding: 24px;">Failed to load activity</td></tr>`;
+      }
+    }
+
+    function viewUserActivity(email) {
+      document.getElementById('actUser').value = email;
+      setActTab('feed', document.querySelectorAll('.act-tab')[1]);
+      loadFeed(true);
+    }
+
+    function diffSnap(before, after) {
+      if (!after) return '';
+      if (!before) return Object.entries(after).map(([k, v]) => `${k}: ${v}`).join(', ');
+      return Object.keys(after).filter(k => String(before[k]) !== String(after[k])).map(k => `${k} ${before[k]} → ${after[k]}`).join(', ');
+    }
+
+    function describeActivity(r) {
+      const d = r.details || {};
+      let text = '';
+      switch (r.action) {
+        case 'order.create': case 'order.update': case 'order.delete':
+          text = `Order #${r.entity_id} · ${d.customer || ''}${d.package ? ' · ' + d.package : ''}`;
+          break;
+        case 'order.status': case 'order.status_auto':
+          text = `Order #${r.entity_id} · ${d.from} → ${d.to}`;
+          break;
+        case 'order.comment':
+          text = `Order #${r.entity_id} · "${d.text || ''}"`;
+          break;
+        case 'inventory.create': case 'inventory.update':
+          text = `${r.entity_label || ''} · ${diffSnap(d.before, d.after)}`;
+          break;
+        case 'inventory.adjust':
+          text = `${r.entity_label || ''} · ${d.before} → ${d.after}`;
+          break;
+        case 'inventory.delete':
+          text = `${r.entity_label || ''} (had ${d.stock_quantity} in stock)`;
+          break;
+        default:
+          text = r.entity_label || '';
+      }
+      const stock = Array.isArray(d.stock)
+        ? d.stock.map(s => `${s.product} ${s.delta > 0 ? '+' : ''}${s.delta}`).join(', ')
+        : '';
+      return { label: ACT_LABELS[r.action] || r.action, text, stock };
+    }
+
+    async function loadFeed(reset) {
+      const body = document.getElementById('actFeedBody');
+      const moreBtn = document.getElementById('actMoreBtn');
+      if (reset) { actFeedOffset = 0; body.innerHTML = ''; }
+
+      const type = document.getElementById('actType').value;
+      const user = document.getElementById('actUser').value;
+      try {
+        const res = await authFetch(`/api/activity?${actRangeQS()}&type=${encodeURIComponent(type)}&user=${encodeURIComponent(user)}&limit=50&offset=${actFeedOffset}`);
+        const data = await readJson(res);
+        if (!res.ok) {
+          body.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#dc2626; padding: 24px;">${escapeHTML(data.error || 'Failed to load')}</td></tr>`;
+          moreBtn.style.display = 'none';
+          return;
+        }
+
+        data.rows.forEach(r => {
+          const info = describeActivity(r);
+          body.insertAdjacentHTML('beforeend', `
+            <tr>
+              <td style="white-space:nowrap; font-size:12px;">${new Date(r.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+              <td>${escapeHTML(r.user_email)}</td>
+              <td><strong>${escapeHTML(info.label)}</strong></td>
+              <td>${escapeHTML(info.text)}${info.stock ? `<span class="act-stock">Stock: ${escapeHTML(info.stock)}</span>` : ''}</td>
+            </tr>`);
+        });
+        actFeedOffset += data.rows.length;
+
+        if (actFeedOffset === 0) {
+          body.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-sub); padding: 24px;">Nothing recorded for these filters.</td></tr>`;
+        }
+        moreBtn.style.display = data.hasMore ? 'inline-flex' : 'none';
+      } catch (err) {
+        body.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#dc2626; padding: 24px;">Failed to load activity</td></tr>`;
+      }
     }
 
     async function logout() {
